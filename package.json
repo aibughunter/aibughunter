@@ -52,7 +52,7 @@
 				"type": "boolean",
 				"default": false
 			},
-			"AIBugHunter.diagnostics.informationLevel":{
+			"AiBugHunter.diagnostics.informationLevel":{
 				"order": 3,
 				"type":"string",
 				"default":"Core",
@@ -68,7 +68,7 @@
 					"Display CWE ID only"
 				]
 			},
-			"AIBugHunter.diagnostics.showDescription":{
+			"AiBugHunter.diagnostics.showDescription":{
 				"order": 4,
 				"type":"boolean",
 				"default":true,
