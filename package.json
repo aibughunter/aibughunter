@@ -146,6 +146,7 @@
   "dependencies": {
     "axios": "^0.27.2",
     "extract-zip": "^2.0.1",
+    "fs": "^0.0.1-security",
     "path": "^0.12.7",
     "xml2json": "^0.12.0"
   }
