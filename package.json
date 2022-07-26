@@ -1,6 +1,7 @@
 {
   "name": "aibughunter",
   "displayName": "AIBugHunter",
+  "publisher": "AIBugHunter",
   "description": "Non-LSP version of AIBugHunter",
   "version": "0.0.1",
   "engines": {
@@ -19,7 +20,104 @@
         "command": "aibughunter.helloWorld",
         "title": "Hello World"
       }
-    ]
+    ],
+	"configuration":{
+		"title":"AIBugHunter",
+		"properties": {
+			"AiBugHunter.inference.inferenceMode":{
+				"order": 0,
+				"type":"string",
+				"default":"Local",
+				"description":"Inference Modes",
+				"enum":[
+					"Local",
+					"On Premise",
+					"Cloud"
+				],
+				"enumDescriptions": [
+					"Model is downloaded locally to your computer and processed locally for inference",
+					"Allows you to host the model on on-premise server for inference",
+					"Model and inference is provided by a cloud service"
+				]
+			},
+			"AiBugHunter.inference.inferenceServerURL":{
+				"order": 2,
+				"type":"string",
+				"default":"http://localhost:8080",
+				"description":"Root URL of the inference server hosted on the on-premise server"
+			},
+			"AiBugHunter.inference.EnableGPU": {
+				"order": 1,
+				"description": "Enable GPU for inference (CPU Fallback)",
+				"type": "boolean",
+				"default": false
+			},
+			"AIBugHunter.diagnostics.informationLevel":{
+				"order": 3,
+				"type":"string",
+				"default":"Core",
+				"description":"Amount of information to be displayed in the diagnostics message",
+				"enum":[
+					"Verbose",
+					"Core",
+					"Minimal"
+				],
+				"enumDescriptions": [
+					"Display all information including vulnerability score",
+					"Show all information except vulnerability score",
+					"Display CWE ID only"
+				]
+			},
+			"AIBugHunter.diagnostics.showDescription":{
+				"order": 4,
+				"type":"boolean",
+				"default":true,
+				"description":"Show CWE description"
+			},
+			"AiBugHunter.diagnostics.highlightSeverityType":{
+				"order": 5,
+				"type":"string",
+				"default":"Error",
+				"description":"Highlight severity type",
+				"enum":[
+					"Error",
+					"Warning",
+					"Information",
+					"Hint"
+				],
+				"enumDescriptions": [
+					"Highlight as error",
+					"Highlight as warning",
+					"Highlight as information",
+					"Highlight as hint"
+				]
+			},
+			"AiBugHunter.diagnostics.maxNumberOfLines":{
+				"order": 6,
+				"type":"number",
+				"default":1,
+				"description":"Top-n number of vulnerable lines to be highlighted"
+			},
+			"AiBugHunter.diagnostics.delayBeforeAnalysis":{
+				"order": 7,
+				"type":"number",
+				"default":1500,
+				"description":"Delay after paused typing before analysis (in milliseconds)"
+			},
+			"AiBugHunter.model.downloadLocation":{
+				"order": 8,
+				"type":"string",
+				"default":".",
+				"description":"Location to download the model to (default: extension directory)"
+			},
+			"AiBugHunter.cWE.downloadLocation":{
+				"order": 9,
+				"type":"string",
+				"default":".",
+				"description":"Location to download the CWE List to (default: extension directory)"
+			}
+		  }
+		}
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
