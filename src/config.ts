@@ -63,3 +63,15 @@ export enum ProgressStages{
     analysisEnd = "analysisEnd",
     error = "error"
 }
+
+export interface Predictions {
+    line?: object;
+    cwe?: object;
+    sev?: object;
+}
+
+export interface FunctionSymbols{
+    functions: Array<string>;
+    shift: Array<Array<number>>;
+    range: any;
+}

@@ -1,9 +1,10 @@
 import { rejects } from 'assert';
+import { copyFileSync } from 'fs';
 import { EventEmitter } from 'stream';
 import { robertaProcessing } from 'tokenizers/bindings/post-processors';
 import { setFlagsFromString } from 'v8';
 import * as vscode from 'vscode';
-import {Config, DebugTypes, DownloadURLs, HighlightTypes, InferenceModes, InformationLevels, ProgressStages} from './config';
+import {Config, DebugTypes, DownloadURLs, FunctionSymbols, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages} from './config';
 
 const axios = require('axios');
 const fs = require('fs');
@@ -13,7 +14,9 @@ const fsa = require('fs/promises');
 const extract = require('extract-zip');
 // const parser = require('xml2js');
 
-var config:Config;
+let config:Config;
+let predictions:Predictions;
+let functionSymbols: FunctionSymbols;
 
 
 class Progress extends EventEmitter{
@@ -79,8 +82,30 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	var arr = ["a", "b", "c"];
 	
-	inference.line(arr);
+	progressEmitter.emit('init', ProgressStages.analysis);
 
+	progressEmitter.emit('update', ProgressStages.symbol);
+
+	await extractFunctions().then(() => {
+		debugMessage(DebugTypes.info, "Finished extracting functions");
+		progressEmitter.emit('update', ProgressStages.line);
+		// progressEmitter.emit('end', ProgressStages.analysis);
+	}
+	).catch(err => {
+		debugMessage(DebugTypes.error, err);
+	}
+	);
+
+	await inference.line(functionSymbols.functions).then(() => {
+		debugMessage(DebugTypes.info, "Finished analysing lines");
+		progressEmitter.emit('update', ProgressStages.sev);
+	}
+	).catch((err: string) => {
+		debugMessage(DebugTypes.error, err);
+	}
+	);
+
+	progressEmitter.emit('end', ProgressStages.analysisEnd);
 
 	context.subscriptions.push(disposable);
 }
@@ -107,6 +132,18 @@ function intialiseConfig(){
 		modelDir: vsconfig.model.downloadLocation,
 		cweDir: vsconfig.cwe.downloadLocation,
 		resSubDir: vsconfig.resources.subDirectory,
+	};
+
+	predictions = {
+		line: new Object(),
+		sev: new Object(),
+		cwe: new Object()
+	};
+
+	functionSymbols = {
+		functions: Array<string>(),
+		shift: Array<Array<number>>(),
+		range: Array<vscode.Range>()
 	};
 }
 
@@ -343,7 +380,7 @@ async function progressHandler(stage: ProgressStages){
 }
 
 export class LocalInference{
-	public line(list: Array<string>){
+	public async line(list: Array<string>): Promise<any>{
 		console.log("Line detection");
 	}
 
@@ -358,7 +395,7 @@ export class LocalInference{
 
 
 export class OnPremiseInference{
-	public line(list: Array<string>){
+	public async line(list: Array<string>): Promise<any>{
 
 		let jsonObject = JSON.stringify(list);
 		var signal = new AbortController;
@@ -368,7 +405,7 @@ export class OnPremiseInference{
 		debugMessage(DebugTypes.info, "Sending line detection request to " + config.inferenceURL);
 		progressEmitter.emit('update', ProgressStages.line);
 
-		axios({
+		await axios({
 			method: "post",
 			url: config.inferenceURL + "/predict",
 			data: jsonObject,
@@ -379,14 +416,17 @@ export class OnPremiseInference{
 				var end = new Date().getTime();
 				var diffInSeconds = (end - start) / 1000;
 
-				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
+				predictions.line = response.data;
 
-				return response.data;
+				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
+				return Promise.resolve();
 			})
-			.catch(function (response: any) {
-				debugMessage(DebugTypes.error, response);
-			  return response;
+			.catch(function (err: any) {
+				debugMessage(DebugTypes.error, err);
+				return Promise.reject(err);
 			});
+
+			// return Promise.resolve(this);
 	}
 
 	public cwe(list: Array<string>){
@@ -399,7 +439,7 @@ export class OnPremiseInference{
 }
 
 export class CloudInference{
-	public line(list: Array<string>){
+	public async line(list: Array<string>): Promise<any>{
 		console.log("Line detection");
 	}
 
@@ -410,4 +450,127 @@ export class CloudInference{
 	public severity(list: Array<string>){
 		console.log("Severity detection");
 	}
+}
+
+/**
+ * Extract list of functions from the current editor using DocumentSymbolProvider
+ * @returns Promise that rejects on error
+ */
+async function extractFunctions(){
+
+	var editor = vscode.window.activeTextEditor;
+	if(editor === undefined){
+		debugMessage(DebugTypes.error, "No editor found");
+		return Promise.reject("No editor found");
+	}
+	var text = editor.document.getText();
+	var lines = text.split("\n");
+
+	if(lines.length === 0){
+		debugMessage(DebugTypes.error, "Empty document");
+		return Promise.reject("Empty document");
+	}
+
+	const uri = vscode.window.activeTextEditor?.document.uri;
+
+	if(uri === undefined){
+		debugMessage(DebugTypes.error, "No document found");
+		return Promise.reject("No document found");
+	}
+
+	debugMessage(DebugTypes.info, "Getting Symbols");
+	progressEmitter.emit('update', ProgressStages.symbol);
+
+	const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+		'vscode.executeDocumentSymbolProvider',
+		uri
+	);
+
+	symbols.forEach(element => {
+		if(element.kind === vscode.SymbolKind.Function){
+
+			// Formatting functions before storing
+			var block: string = "";
+			for(var i = element.range.start.line; i <= element.range.end.line; i++){
+				block += lines[i];
+				if(i !== element.range.end.line){
+					block += "\n";
+				}
+			}
+
+			block = removeComments(block);
+
+			const result = removeBlankLines(block);
+
+			functionSymbols.functions.push(result[0]);
+			functionSymbols.shift.push(result[1]);
+			functionSymbols.range.push(element.range);
+			
+		}
+	});
+}
+
+/**
+ * Remove comments from the given string
+ * @param text Text to remove comments from
+ * @returns Text without comments
+ */
+function removeComments(text:string): string{
+
+	let newline = "\n";
+
+	// For Block Comments (/* */)
+	let pattern = /\/\*[^]*?\*\//g; 
+	let matches = text.matchAll(pattern);
+	
+
+	for (const match of matches) {
+
+		var start = match.index ? match.index : 0; // Starting index of the match
+		let length = match.length + match[0].length-1; // Length of the match
+		let end = start + length; // Ending index of the match
+
+		let lineStart = text.substring(0, match.index).split("\n").length;
+		let lineEnd = text.substring(0, end).split("\n").length;
+		let diff = lineEnd - lineStart;
+
+		text = text.replace(match[0], newline.repeat(diff));
+	}
+
+	// For line comments (//)
+	pattern =/\/\/.*/g; 
+	matches = text.matchAll(pattern);
+	for (const match of matches) {
+
+		var start = match.index ? match.index : 0; // Starting index of the match
+		let length = match.length + match[0].length-1; // Length of the match
+		let end = start + length; // Ending index of the match
+
+		let lineStart = text.substring(0, match.index).split("\n").length;
+		let lineEnd = text.substring(0, end).split("\n").length;
+		let diff = lineEnd - lineStart;
+
+		text = text.replace(match[0], newline.repeat(diff));
+	}
+
+	return text;
+}
+
+/**
+ * Remove blank lines from the given string
+ * @param text Text to remove blank lines from
+ * @returns Text without blank lines
+ */
+function removeBlankLines(text:string): [string,number[]]{
+	let lines = text.split("\n");
+	let newLines = [];
+	let shiftMap = [];
+	for (let i = 0; i < lines.length; i++) {
+		if (!lines[i].replace(/^\s+/g, '').length) { // If line is empty, remove and record the line affected
+			shiftMap.push(i);
+		} else {
+			newLines.push(lines[i]);
+		}
+	}
+	return [newLines.join("\n"), shiftMap];
 }
