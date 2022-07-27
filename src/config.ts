@@ -65,13 +65,14 @@ export enum ProgressStages{
 }
 
 export interface Predictions {
-    line?: object;
-    cwe?: object;
-    sev?: object;
+    line?: any;
+    cwe?: any;
+    sev?: any;
 }
 
-export interface FunctionSymbols{
+export interface Functions{
     functions: Array<string>;
+    vulnFunctions: Array<string>;
     shift: Array<Array<number>>;
     range: any;
 }

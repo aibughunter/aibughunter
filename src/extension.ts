@@ -4,7 +4,7 @@ import { EventEmitter } from 'stream';
 import { robertaProcessing } from 'tokenizers/bindings/post-processors';
 import { setFlagsFromString } from 'v8';
 import * as vscode from 'vscode';
-import {Config, DebugTypes, DownloadURLs, FunctionSymbols, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages} from './config';
+import {Config, DebugTypes, DownloadURLs, Functions, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages} from './config';
 
 const axios = require('axios');
 const fs = require('fs');
@@ -16,7 +16,7 @@ const extract = require('extract-zip');
 
 let config:Config;
 let predictions:Predictions;
-let functionSymbols: FunctionSymbols;
+let functionSymbols: Functions;
 
 
 class Progress extends EventEmitter{
@@ -98,12 +98,38 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	await inference.line(functionSymbols.functions).then(() => {
 		debugMessage(DebugTypes.info, "Finished analysing lines");
+
+		predictions.line.batch_vul_pred.forEach((element: any, i: number) => {
+			if(element === 1){
+				functionSymbols.vulnFunctions.push(functionSymbols.functions[i]);
+			}
+		});
+
+		progressEmitter.emit('update', ProgressStages.cwe);
+	}
+	).catch((err: string) => {
+		debugMessage(DebugTypes.error, err);
+	}
+	);
+
+	await inference.cwe(functionSymbols.vulnFunctions).then(() => {
+		debugMessage(DebugTypes.info, "Finished analysing lines");
 		progressEmitter.emit('update', ProgressStages.sev);
 	}
 	).catch((err: string) => {
 		debugMessage(DebugTypes.error, err);
 	}
 	);
+
+	await inference.sev(functionSymbols.vulnFunctions).then(() => {
+		debugMessage(DebugTypes.info, "Finished analysing lines");
+		progressEmitter.emit('end', ProgressStages.analysis);
+	}
+	).catch((err: string) => {
+		debugMessage(DebugTypes.error, err);
+	}
+	);
+
 
 	progressEmitter.emit('end', ProgressStages.analysisEnd);
 
@@ -116,7 +142,7 @@ export function deactivate() {}
 /**
  * Initialises global configuration from VS Code user configuration
  */
-function intialiseConfig(){
+function interfaceInit(){
 
 	const vsconfig = vscode.workspace.getConfiguration('AiBugHunter');
 
@@ -135,13 +161,14 @@ function intialiseConfig(){
 	};
 
 	predictions = {
-		line: new Object(),
-		sev: new Object(),
-		cwe: new Object()
+		line: Object(),
+		sev: Object(),
+		cwe: Object()
 	};
 
 	functionSymbols = {
 		functions: Array<string>(),
+		vulnFunctions: Array<string>(),
 		shift: Array<Array<number>>(),
 		range: Array<vscode.Range>()
 	};
@@ -293,7 +320,7 @@ async function init() {
 
 	var start = new Date().getTime();
 
-	intialiseConfig();
+	interfaceInit();
 
 	debugMessage(DebugTypes.info, "Config loaded, checking model and CWE list presence");
 
@@ -384,17 +411,23 @@ export class LocalInference{
 		console.log("Line detection");
 	}
 
-	public cwe(list: Array<string>){
+	public async cwe(list: Array<string>): Promise<any>{
 		console.log("CVE detection");
 	}
 
-	public severity(list: Array<string>){
+	public async sev(list: Array<string>): Promise<any>{
 		console.log("Severity detection");
 	}
 }
 
 
 export class OnPremiseInference{
+
+	/**
+	 * Takes a list of all functions in the document, sends them to the remote inference engine and returns the results
+	 * @param list List of functions to analyse
+	 * @returns Promise that resolves when successfully received results, rejects if error occurs
+	 */
 	public async line(list: Array<string>): Promise<any>{
 
 		let jsonObject = JSON.stringify(list);
@@ -402,12 +435,12 @@ export class OnPremiseInference{
 		signal.abort;
 		var start = new Date().getTime();
 		
-		debugMessage(DebugTypes.info, "Sending line detection request to " + config.inferenceURL);
+		debugMessage(DebugTypes.info, "Sending line detection request to " + config.inferenceURL + ((config.gpu)? "/v1/gpu/predict" : "/v1/cpu/predict"));
 		progressEmitter.emit('update', ProgressStages.line);
 
 		await axios({
 			method: "post",
-			url: config.inferenceURL + "/predict",
+			url: config.inferenceURL + ((config.gpu)? "/v1/gpu/predict" : "/v1/cpu/predict"),
 			data: jsonObject,
 			signal: signal.signal,
 			headers: { "Content-Type":"application/json"},
@@ -419,22 +452,88 @@ export class OnPremiseInference{
 				predictions.line = response.data;
 
 				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
-				return Promise.resolve();
+				return Promise.resolve(response.data);
 			})
 			.catch(function (err: any) {
 				debugMessage(DebugTypes.error, err);
 				return Promise.reject(err);
 			});
-
-			// return Promise.resolve(this);
 	}
 
-	public cwe(list: Array<string>){
-		console.log("CVE detection");
+
+	/**
+	 * Takes a list of vulnerable functions, sends them to remote inference engine for inference, then stores the list of CWE results in the predictions.cwe object
+	 * @param list List of functions to be analysed
+	 * @returns Promise that resolves when successfully received response from model, rejects if error occurs
+	 */
+	public async cwe(list: Array<string>): Promise<any>{
+		let jsonObject = JSON.stringify(list);
+		var signal = new AbortController;
+		signal.abort;
+		var start = new Date().getTime();
+
+		debugMessage(DebugTypes.info, "Sending CWE detection request to " + config.inferenceURL + ((config.gpu)? "/v1/gpu/cwe" : "/v1/cpu/cwe"));
+		progressEmitter.emit('update', ProgressStages.cwe);
+		await axios({
+			method: "post",
+			url: config.inferenceURL + ((config.gpu)? "/v1/gpu/cwe" : "/v1/cpu/cwe"),
+			data: jsonObject,
+			signal: signal.signal,
+			headers: { "Content-Type":"application/json"},
+		})
+			.then(function (response: any) {
+				var end = new Date().getTime();
+				var diffInSeconds = (end - start) / 1000;
+
+				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
+				predictions.cwe = response.data;
+
+				return Promise.resolve(response.data);
+			})
+			.catch(function (response: any) {
+				debugMessage(DebugTypes.error, response);
+				return Promise.reject(response);
+			});
+
 	}
 
-	public severity(list: Array<string>){
-		console.log("Severity detection");
+
+
+	/**
+	 * Takes a list of vulnerable functions, sends them to remote inference engine, then stores the list of severity results in the predictions.sev object 
+	 * @param list List of functions to be analysed (Only vulnerable functions are analysed)
+	 * @returns Promise that resolves when successfully received response from model, rejects if error occurs
+	 */
+	public async sev(list: Array<string>): Promise<any>{
+
+		let jsonObject = JSON.stringify(list);
+		var signal = new AbortController;
+		signal.abort;
+		var start = new Date().getTime();
+
+		debugMessage(DebugTypes.info, "Sending security score request to " + config.inferenceURL + ((config.gpu)? "/v1/gpu/sev" : "/v1/cpu/sev"));
+		progressEmitter.emit('update', ProgressStages.sev);
+
+		await axios({
+			method: "post",
+			url: config.inferenceURL + ((config.gpu)? "/v1/gpu/sev" : "/v1/cpu/sev"),
+			data: jsonObject,
+			signal: signal.signal,
+			headers: { "Content-Type":"application/json"},
+			})
+			.then(function (response: any) {
+				var end = new Date().getTime();
+				var diffInSeconds = (end - start) / 1000;
+
+				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
+				predictions.sev = response.data;
+
+				return Promise.resolve(response.data);
+			})
+			.catch(function (response: any) {
+				debugMessage(DebugTypes.error, response);
+				return Promise.reject(response);
+			});
 	}
 }
 
@@ -443,11 +542,11 @@ export class CloudInference{
 		console.log("Line detection");
 	}
 
-	public cwe(list: Array<string>){
+	public async cwe(list: Array<string>): Promise<any>{
 		console.log("CVE detection");
 	}
 
-	public severity(list: Array<string>){
+	public async sev(list: Array<string>): Promise<any>{
 		console.log("Severity detection");
 	}
 }
@@ -485,6 +584,12 @@ async function extractFunctions(){
 		'vscode.executeDocumentSymbolProvider',
 		uri
 	);
+
+	if(symbols === undefined){
+		debugMessage(DebugTypes.error, "No symbols found");
+		return Promise.reject("No symbols found");
+	}
+
 
 	symbols.forEach(element => {
 		if(element.kind === vscode.SymbolKind.Function){
