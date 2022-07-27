@@ -116,12 +116,12 @@
           "default": ".",
           "description": "Location to download the CWE List to (default: extension directory)"
         },
-		"AiBugHunter.resources.subDirectory":{
-			"order": 10,
-			"type": "string",
-			"default": "resources",
-			"description": "Subdirectory to store resources (models, CWE list, etc.). Empty for no subdirectory."
-		}
+        "AiBugHunter.resources.subDirectory": {
+          "order": 10,
+          "type": "string",
+          "default": "resources",
+          "description": "Subdirectory to store resources (models, CWE list, etc.). Empty for no subdirectory."
+        }
       }
     }
   },
@@ -154,6 +154,7 @@
     "extract-zip": "^2.0.1",
     "fs": "^0.0.1-security",
     "path": "^0.12.7",
+    "tokenizers": "^0.12.0",
     "xml2json": "^0.12.0"
   }
 }

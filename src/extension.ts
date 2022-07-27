@@ -1,5 +1,6 @@
 import { rejects } from 'assert';
 import { EventEmitter } from 'stream';
+import { robertaProcessing } from 'tokenizers/bindings/post-processors';
 import { setFlagsFromString } from 'v8';
 import * as vscode from 'vscode';
 import {Config, DebugTypes, DownloadURLs, HighlightTypes, InferenceModes, InformationLevels, ProgressStages} from './config';
@@ -19,7 +20,6 @@ class Progress extends EventEmitter{
 	constructor(){
 		super();
 	}
-
 	init(stage:ProgressStages){
 		this.emit('init', stage);
 	}
@@ -67,7 +67,21 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	debugMessage(DebugTypes.info, "Extension initialised");
 	vscode.window.showInformationMessage('AIBugHunter: Extension Initialised!');
+
+	let inference;
+
+	switch(config.inferenceMode){
+		case InferenceModes.local:inference = new LocalInference();break; 
+		case InferenceModes.onpremise:inference = new OnPremiseInference();break;
+		case InferenceModes.cloud:inference = new CloudInference();break;
+		default:inference = new LocalInference();break;
+	}
+
+	var arr = ["a", "b", "c"];
 	
+	inference.line(arr);
+
+
 	context.subscriptions.push(disposable);
 }
 
@@ -326,4 +340,74 @@ async function progressHandler(stage: ProgressStages){
 
 		return promise;
 	});
+}
+
+export class LocalInference{
+	public line(list: Array<string>){
+		console.log("Line detection");
+	}
+
+	public cwe(list: Array<string>){
+		console.log("CVE detection");
+	}
+
+	public severity(list: Array<string>){
+		console.log("Severity detection");
+	}
+}
+
+
+export class OnPremiseInference{
+	public line(list: Array<string>){
+
+		let jsonObject = JSON.stringify(list);
+		var signal = new AbortController;
+		signal.abort;
+		var start = new Date().getTime();
+		
+		debugMessage(DebugTypes.info, "Sending line detection request to " + config.inferenceURL);
+		progressEmitter.emit('update', ProgressStages.line);
+
+		axios({
+			method: "post",
+			url: config.inferenceURL + "/predict",
+			data: jsonObject,
+			signal: signal.signal,
+			headers: { "Content-Type":"application/json"},
+		  })
+			.then(async function (response: any) {
+				var end = new Date().getTime();
+				var diffInSeconds = (end - start) / 1000;
+
+				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
+
+				return response.data;
+			})
+			.catch(function (response: any) {
+				debugMessage(DebugTypes.error, response);
+			  return response;
+			});
+	}
+
+	public cwe(list: Array<string>){
+		console.log("CVE detection");
+	}
+
+	public severity(list: Array<string>){
+		console.log("Severity detection");
+	}
+}
+
+export class CloudInference{
+	public line(list: Array<string>){
+		console.log("Line detection");
+	}
+
+	public cwe(list: Array<string>){
+		console.log("CVE detection");
+	}
+
+	public severity(list: Array<string>){
+		console.log("Severity detection");
+	}
 }

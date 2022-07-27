@@ -22,22 +22,22 @@ export interface Config {
 } 
 
 export enum InferenceModes {
-    local = "local",
-    onpremise = "onpremise",
-    cloud = "cloud"
+    local = "Local",
+    onpremise = "On Premise",
+    cloud = "Cloud"
 }
 
 export enum InformationLevels {
-    verborse = "verborse",
-    core = "core",
-    minimal = "minimal"
+    verborse = "Verborse",
+    core = "Core",
+    minimal = "Minimal"
 }
 
 export enum HighlightTypes {
-    error = "error",
-    warning = "warning",
-    information = "information",
-    hint = "hint"
+    error = "Error",
+    warning = "Warning",
+    information = "Information",
+    hint = "Hint"
 }
 
 export enum DebugTypes {
