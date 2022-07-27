@@ -110,12 +110,18 @@
           "default": ".",
           "description": "Location to download the model to (default: extension directory)"
         },
-        "AiBugHunter.cWE.downloadLocation": {
+        "AiBugHunter.cwe.downloadLocation": {
           "order": 9,
           "type": "string",
           "default": ".",
           "description": "Location to download the CWE List to (default: extension directory)"
-        }
+        },
+		"AiBugHunter.resources.subDirectory":{
+			"order": 10,
+			"type": "string",
+			"default": "resources",
+			"description": "Subdirectory to store resources (models, CWE list, etc.). Empty for no subdirectory."
+		}
       }
     }
   },

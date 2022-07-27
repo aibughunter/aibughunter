@@ -3,3 +3,6 @@ dist
 node_modules
 .vscode-test/
 *.vsix
+src/resources/sev_model.onnx
+src/resources/cwe_model.onnx
+src/resources/line_model.onnx
