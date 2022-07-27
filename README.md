@@ -2,6 +2,10 @@
 
 This is the README for your extension "aibughunter". After writing up a brief description, we recommend including the following sections.
 
+## Known Issues
+
+- Native implementation of model inference not possible as RoBERTa tokeniser is not available on npm/Node JS
+
 ## Features
 
 Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
