@@ -1,7 +1,8 @@
 import { rejects } from 'assert';
+import { EventEmitter } from 'stream';
 import { setFlagsFromString } from 'v8';
 import * as vscode from 'vscode';
-import {Config, DebugTypes, DownloadURLs, HighlightTypes, InferenceModes, InformationLevels} from './config';
+import {Config, DebugTypes, DownloadURLs, HighlightTypes, InferenceModes, InformationLevels, ProgressStages} from './config';
 
 const axios = require('axios');
 const fs = require('fs');
@@ -13,6 +14,27 @@ const extract = require('extract-zip');
 
 var config:Config;
 
+
+class Progress extends EventEmitter{
+	constructor(){
+		super();
+	}
+
+	init(stage:ProgressStages){
+		this.emit('init', stage);
+	}
+
+	update(stage:ProgressStages){
+		this.emit('update', stage);
+	}
+
+	end(stage:ProgressStages){
+		this.emit('end', stage);
+	}
+}
+
+const progressEmitter = new Progress();
+
 export async function activate(context: vscode.ExtensionContext) {
 	
 	let disposable = vscode.commands.registerCommand('aibughunter.helloWorld', () => {
@@ -21,10 +43,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	debugMessage(DebugTypes.info, "Extension activated");
 
+	progressEmitter.on('init', (stage:ProgressStages) => {
+		progressHandler(stage);
+	}
+	);
 
-	vscode.window.showInformationMessage('AiBugHunter: Initialising...');
+	progressEmitter.emit('init', ProgressStages.extInit);
 
 	var noerror = false;
+
 	while(!noerror){
 		await init().then(() => {
 			noerror = true;
@@ -36,15 +63,16 @@ export async function activate(context: vscode.ExtensionContext) {
 		);
 	}
 
+	progressEmitter.emit('end', ProgressStages.extInitEnd);
+
 	debugMessage(DebugTypes.info, "Extension initialised");
 	vscode.window.showInformationMessage('AIBugHunter: Extension Initialised!');
-
 	
 	context.subscriptions.push(disposable);
 }
 
-export function deactivate() {}
 
+export function deactivate() {}
 
 /**
  * Initialises global configuration from VS Code user configuration
@@ -52,7 +80,6 @@ export function deactivate() {}
 function intialiseConfig(){
 
 	const vsconfig = vscode.workspace.getConfiguration('AiBugHunter');
-	// const modelPath = (config.modelDir === ".")? __dirname + "/" + config.modelDir: config.modelDir;
 
 	config = {
 		inferenceMode: vsconfig.inference.inferenceMode,
@@ -64,11 +91,7 @@ function intialiseConfig(){
 		maxLines: vsconfig.diagnostics.maxNumberOfLines,
 		delay: vsconfig.diagnostics.delayBeforeAnalysis,
 		modelDir: vsconfig.model.downloadLocation,
-		// lineModelURL: DownloadURLs.lineModel,
-		// sevModelURL: DownloadURLs.sevModel,
-		// cweModelURL: DownloadURLs.cweModel,
 		cweDir: vsconfig.cwe.downloadLocation,
-		// cweURL: DownloadURLs.cweList
 		resSubDir: vsconfig.resources.subDirectory,
 	};
 }
@@ -256,4 +279,51 @@ async function init() {
 		return Promise.reject(err);
 	}
 	);
+}
+
+/**
+ * Creates a new progress bar when init is emitted from ProgressEmitter, and handle events until 'end' is emitted
+ * @param stage Stages in the progress
+ */
+
+async function progressHandler(stage: ProgressStages){
+	await vscode.window.withProgress({
+		location: vscode.ProgressLocation.Window,
+		title: "AIBugHunter",
+		cancellable: true
+	}, (progress, token) => {
+
+		token.onCancellationRequested(() => {
+			console.log("User canceled the long running operation");
+		});
+
+		switch(stage){
+			case ProgressStages.extInit: progress.report({ message: "Initialisation - Downloading models and CWE List...", increment: 0}); break;
+			case ProgressStages.analysis: progress.report({ message: "Starting analysis...", increment: 0}); break;
+		}
+		
+		progressEmitter.on('update', (stage: ProgressStages) =>{
+			switch(stage){
+				case ProgressStages.symbol: progress.report({message: "Getting symbols...", increment:10}); break;
+				case ProgressStages.line: progress.report({message:"Detecting vulnerabilities...", increment: 20}); break;
+				case ProgressStages.cwe: progress.report({message: "Identifying CWEs...", increment: 50}); break;
+				case ProgressStages.sev: progress.report({message: "Getting severity scores...", increment: 70}); break;
+			}
+		});
+
+		const promise = new Promise<void>(resolve => {
+			progressEmitter.on('end', (stage:ProgressStages) => {
+				switch(stage){
+					case ProgressStages.extInitEnd: progress.report({message: "Initialisation complete", increment: 100}); break;
+					case ProgressStages.analysisEnd: progress.report({message: "Analysis complete", increment: 100}); break;
+					case ProgressStages.error: progress.report({message: "Error occured - Terminating...", increment: 100}); break;
+				}
+				setTimeout(() => {
+					resolve();
+				}, 2000);
+			});
+		});
+
+		return promise;
+	});
 }

@@ -51,3 +51,15 @@ export enum DownloadURLs {
     cweModel = "https://object-store.rc.nectar.org.au/v1/AUTH_bec3bd546fd54995896239e9ff3d4c4f/AIBugHunterModels/models/cwe_model.onnx",
     cweList = "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip"
 }
+
+export enum ProgressStages{
+    extInit = "extinit",
+    extInitEnd = "extInitEnd",
+    analysis = "analysis",
+    symbol = "symbol",
+    line = "line",
+    cwe = "cwe",
+    sev = "sev",
+    analysisEnd = "analysisEnd",
+    error = "error"
+}
