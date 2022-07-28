@@ -17,6 +17,7 @@ const extract = require('extract-zip');
 let config:Config;
 let predictions:Predictions;
 let functionSymbols: Functions;
+let inferenceMode: LocalInference | OnPremiseInference | CloudInference;
 
 class Progress extends EventEmitter{
 	constructor(){
@@ -45,8 +46,35 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	debugMessage(DebugTypes.info, "Extension activated");
 
+	analysis().then(() => {
+		debugMessage(DebugTypes.info, "Analysis finished");
+		progressEmitter.emit('end', ProgressStages.analysisEnd);
+	}
+	).catch(err => {
+		debugMessage(DebugTypes.error, err);
+		debugMessage(DebugTypes.error, "Analysis failed");
+		progressEmitter.end(ProgressStages.error);
+	}
+	);
+
 	progressEmitter.on('init', (stage:ProgressStages) => {
+
 		progressHandler(stage);
+		
+		if(stage === ProgressStages.analysis){
+			debugMessage(DebugTypes.info, "Analysis started");
+			
+			analysis().then(() => {
+				debugMessage(DebugTypes.info, "Analysis finished");
+				progressEmitter.emit('end', ProgressStages.analysisEnd);
+			}
+			).catch(err => {
+				debugMessage(DebugTypes.error, err);
+				debugMessage(DebugTypes.error, "Analysis failed");
+				progressEmitter.end(ProgressStages.error);
+			}
+			);
+		}
 	}
 	);
 
@@ -70,82 +98,19 @@ export async function activate(context: vscode.ExtensionContext) {
 	debugMessage(DebugTypes.info, "Extension initialised");
 	vscode.window.showInformationMessage('AIBugHunter: Extension Initialised!');
 
-	let inference;
-
-	switch(config.inferenceMode){
-		case InferenceModes.local:inference = new LocalInference();break; 
-		case InferenceModes.onpremise:inference = new OnPremiseInference();break;
-		case InferenceModes.cloud:inference = new CloudInference();break;
-		default:inference = new LocalInference();break;
-	}
-
-	var arr = ["a", "b", "c"];
-	
-	progressEmitter.emit('init', ProgressStages.analysis);
-
-	progressEmitter.emit('update', ProgressStages.symbol);
-
-	await extractFunctions().then(() => {
-		debugMessage(DebugTypes.info, "Finished extracting functions");
-		progressEmitter.emit('update', ProgressStages.line);
-		// progressEmitter.emit('end', ProgressStages.analysis);
-	}
-	).catch(err => {
-		debugMessage(DebugTypes.error, err);
-	}
-	);
-
-	await inference.line(functionSymbols.functions).then(() => {
-		debugMessage(DebugTypes.info, "Finished analysing lines");
-
-		predictions.line.batch_vul_pred.forEach((element: any, i: number) => {
-			if(element === 1){
-				functionSymbols.vulnFunctions.push(functionSymbols.functions[i]);
-			}
-		});
-
-		progressEmitter.emit('update', ProgressStages.cwe);
-	}
-	).catch((err: string) => {
-		debugMessage(DebugTypes.error, err);
-	}
-	);
-
-	await inference.cwe(functionSymbols.vulnFunctions).then(() => {
-		debugMessage(DebugTypes.info, "Finished analysing lines");
-		progressEmitter.emit('update', ProgressStages.sev);
-	}
-	).catch((err: string) => {
-		debugMessage(DebugTypes.error, err);
-	}
-	);
-
-	await inference.sev(functionSymbols.vulnFunctions).then(() => {
-		debugMessage(DebugTypes.info, "Finished analysing lines");
-		progressEmitter.emit('end', ProgressStages.analysis);
-	}
-	).catch((err: string) => {
-		debugMessage(DebugTypes.error, err);
-	}
-	);
-
-
-	progressEmitter.emit('end', ProgressStages.analysisEnd);
-
-
-	//---
 	let wait: NodeJS.Timeout;
 
 	vscode.workspace.onDidChangeTextDocument((e) =>{
 
 		if(e.contentChanges.length > 0){
 
-			debugMessage(DebugTypes.info, "Text Document Change Detected");
-
 			clearTimeout(wait);
 
 			wait = setTimeout(() => {
-				console.log("Timeout after " + config.delay + "ms");
+				debugMessage(DebugTypes.info, "Typing stopped for " + config.delay + "ms");
+				
+				progressEmitter.emit('init', ProgressStages.analysis);
+
 			}, config.delay);
 	
 		}
@@ -198,6 +163,13 @@ function interfaceInit(){
 		shift: Array<Array<number>>(),
 		range: Array<vscode.Range>()
 	};
+
+	switch(config.inferenceMode){
+		case InferenceModes.local:inferenceMode = new LocalInference();break; 
+		case InferenceModes.onpremise:inferenceMode = new OnPremiseInference();break;
+		case InferenceModes.cloud:inferenceMode = new CloudInference();break;
+		default:inferenceMode = new LocalInference();break;
+	}
 }
 
 /**
@@ -523,8 +495,6 @@ export class OnPremiseInference{
 
 	}
 
-
-
 	/**
 	 * Takes a list of vulnerable functions, sends them to remote inference engine, then stores the list of severity results in the predictions.sev object 
 	 * @param list List of functions to be analysed (Only vulnerable functions are analysed)
@@ -606,16 +576,29 @@ async function extractFunctions(){
 	debugMessage(DebugTypes.info, "Getting Symbols");
 	progressEmitter.emit('update', ProgressStages.symbol);
 
-	const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-		'vscode.executeDocumentSymbolProvider',
-		uri
-	);
+	// Attempt to get symbols from the current document 3 times, if it fails, then reject
+	// This is to avoid the edge case where the DocumentSymbolProvider is not yet ready when the initial analysis is requested
 
-	if(symbols === undefined){
-		debugMessage(DebugTypes.error, "No symbols found");
-		return Promise.reject("No symbols found");
+	let start = new Date().getTime();
+
+	let symbols: vscode.DocumentSymbol[] = [];
+	for(var i = 0; i < 3; i++){
+		symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>('vscode.executeDocumentSymbolProvider', uri);
+		if(symbols === undefined){
+			debugMessage(DebugTypes.error, "No symbols found, retrying... [Attempt " + (i+1) + "]");
+		} else{
+			continue;
+		}
 	}
 
+	let end = new Date().getTime();
+
+	if(symbols === undefined){
+		debugMessage(DebugTypes.error, "No symbols found after 3 attempts");
+		return Promise.reject("No symbols found");
+	} else{
+		debugMessage(DebugTypes.info, "Found " + symbols.length + " symbols in " + (end - start) + " milliseconds");
+	}
 
 	symbols.forEach(element => {
 		if(element.kind === vscode.SymbolKind.Function){
@@ -706,6 +689,70 @@ function removeBlankLines(text:string): [string,number[]]{
 	return [newLines.join("\n"), shiftMap];
 }
 
-async function textAnalysis(){
+async function analysis(){
 
+	// console.log(vscode.window.activeTextEditor?.document.getText());
+
+	if(vscode.window.activeTextEditor?.document.getText() === ""){
+		debugMessage(DebugTypes.error, "Document is empty, aborting analysis");
+		return Promise.reject("Document is empty, aborting analysis");
+	}
+
+	await extractFunctions().then(() => {
+		debugMessage(DebugTypes.info, "Finished extracting functions");
+	}
+	).catch(err => {
+		debugMessage(DebugTypes.error, err);
+		return Promise.reject(err);
+	}
+	);
+
+	progressEmitter.emit('update', ProgressStages.line);
+
+	await inferenceMode.line(functionSymbols.functions).then(() => {
+		debugMessage(DebugTypes.info, "Finished analysing lines");
+
+		predictions.line.batch_vul_pred.forEach((element: any, i: number) => {
+			if(element === 1){
+				functionSymbols.vulnFunctions.push(functionSymbols.functions[i]);
+			}
+		});
+	}
+	).catch((err: string) => {
+		debugMessage(DebugTypes.error, err);
+		return Promise.reject(err);
+	}
+	);
+
+	progressEmitter.emit('update', ProgressStages.cwe);
+
+	await inferenceMode.cwe(functionSymbols.vulnFunctions).then(() => {
+		debugMessage(DebugTypes.info, "CWE type retrieved");
+	}
+	).catch((err: string) => {
+		debugMessage(DebugTypes.error, err);
+		return Promise.reject(err);
+	}
+	);
+
+	progressEmitter.emit('update', ProgressStages.sev);
+
+	await inferenceMode.sev(functionSymbols.vulnFunctions).then(() => {
+		debugMessage(DebugTypes.info, "Severity score retrieved");	}
+	).catch((err: string) => {
+		debugMessage(DebugTypes.error, err);
+		return Promise.reject(err);
+	}
+	);
+
+	progressEmitter.emit('end', ProgressStages.analysis);
+
+	return Promise.resolve();
+
+	// Can promise all for cwe and sev for higher performance but error messages are consolidated
+
+}
+
+function constructDiagnostics(){
+	
 }
