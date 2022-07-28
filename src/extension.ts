@@ -18,7 +18,6 @@ let config:Config;
 let predictions:Predictions;
 let functionSymbols: Functions;
 
-
 class Progress extends EventEmitter{
 	constructor(){
 		super();
@@ -133,11 +132,38 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	progressEmitter.emit('end', ProgressStages.analysisEnd);
 
+
+	//---
+	let wait: NodeJS.Timeout;
+
+	vscode.workspace.onDidChangeTextDocument((e) =>{
+
+		if(e.contentChanges.length > 0){
+
+			debugMessage(DebugTypes.info, "Text Document Change Detected");
+
+			clearTimeout(wait);
+
+			wait = setTimeout(() => {
+				console.log("Timeout after " + config.delay + "ms");
+			}, config.delay);
+	
+		}
+	});
+
+	// Reinitialise interfaces on configuration modification
+	vscode.workspace.onDidChangeConfiguration((e) => {
+		debugMessage(DebugTypes.info, "Configuration Changed");
+		interfaceInit();
+		// console.log(e);
+	});
+
 	context.subscriptions.push(disposable);
 }
 
 
 export function deactivate() {}
+
 
 /**
  * Initialises global configuration from VS Code user configuration
@@ -678,4 +704,8 @@ function removeBlankLines(text:string): [string,number[]]{
 		}
 	}
 	return [newLines.join("\n"), shiftMap];
+}
+
+async function textAnalysis(){
+
 }
