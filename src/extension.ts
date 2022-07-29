@@ -5,7 +5,7 @@ import { robertaProcessing } from 'tokenizers/bindings/post-processors';
 import { setFlagsFromString } from 'v8';
 import * as vscode from 'vscode';
 import { MessageChannel } from 'worker_threads';
-import {Config, DebugTypes, DownloadURLs, Functions, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages} from './config';
+import {Config, DebugTypes, DownloadURLs, Functions, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages, remoteInferenceURLs} from './config';
 
 const axios = require('axios');
 const fs = require('fs');
@@ -13,12 +13,13 @@ const path = require('path');
 const fsa = require('fs/promises');
 // const formdata = require('form-data');
 const extract = require('extract-zip');
-// const parser = require('xml2js');
+const parser = require('xml2js');
+
 
 let config:Config;
 let predictions:Predictions;
 let functionSymbols: Functions;
-let inferenceMode: LocalInference | OnPremiseInference | CloudInference;
+let inferenceMode: LocalInference | RemoteInference;
 
 class Progress extends EventEmitter{
 	constructor(){
@@ -48,6 +49,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
 
 	const activeDocument = vscode.window.activeTextEditor?.document ?? undefined;
+	
+	const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
+	context.subscriptions.push(diagnosticCollection);
 
 	/**
 	 * Any init event will be handled here
@@ -57,6 +61,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	 */
 
 	progressEmitter.on('init', async (stage:ProgressStages) => {
+
 
 		progressHandler(stage);
 
@@ -83,9 +88,7 @@ export async function activate(context: vscode.ExtensionContext) {
 					analysis().then(() => {
 						debugMessage(DebugTypes.info, "Analysis finished");
 						progressEmitter.emit('end', ProgressStages.analysisEnd);
-		
-						const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
-						context.subscriptions.push(diagnosticCollection);
+	
 						constructDiagnostics(activeDocument, diagnosticCollection);
 					}
 					).catch(err => {
@@ -99,6 +102,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 	);
+
 
 	progressEmitter.emit('init', ProgressStages.extInit);
 
@@ -124,9 +128,25 @@ export async function activate(context: vscode.ExtensionContext) {
 	vscode.workspace.onDidChangeConfiguration((e) => {
 		debugMessage(DebugTypes.info, "Configuration Changed");
 		interfaceInit();
-		// console.log(e);
 	});
 
+	// vscode.workspace.onDidOpenTextDocument((e) => {
+	// 	debugMessage(DebugTypes.info, "Document opened");
+	// 	console.log(e);
+	// 	// if(e?.document.languageId === 'cpp'){
+	// 	// 	interfaceInit();
+	// 	// 	progressEmitter.emit('init', ProgressStages.analysis);
+	// 	// }
+	// }
+	// );
+
+	vscode.window.onDidChangeActiveTextEditor((e) => {
+		debugMessage(DebugTypes.info, "Active text editor changed");
+		if(e?.document.languageId === 'cpp'){
+			interfaceInit();
+			progressEmitter.emit('init', ProgressStages.analysis);
+		}
+	});
 	// context.subscriptions.push(disposable);
 }
 
@@ -144,7 +164,7 @@ function interfaceInit(){
 	config = {
 		inferenceMode: vsconfig.inference.inferenceMode,
 		gpu: vsconfig.inference.EnableGPU,
-		inferenceURL: vsconfig.inference.inferenceServerURL,
+		onPremiseInferenceURL: vsconfig.inference.inferenceServerURL,
 		informationLevel: vsconfig.diagnostics.informationLevel,
 		showDescription: vsconfig.diagnostics.showDescription,
 		maxLines: vsconfig.diagnostics.maxNumberOfLines,
@@ -176,8 +196,8 @@ function interfaceInit(){
 
 	switch(config.inferenceMode){
 		case InferenceModes.local:inferenceMode = new LocalInference();break; 
-		case InferenceModes.onpremise:inferenceMode = new OnPremiseInference();break;
-		case InferenceModes.cloud:inferenceMode = new CloudInference();break;
+		case InferenceModes.onpremise:inferenceMode = new RemoteInference();break;
+		case InferenceModes.cloud:inferenceMode = new RemoteInference();break;
 		default:inferenceMode = new LocalInference();break;
 	}
 }
@@ -350,7 +370,9 @@ async function init() {
 	// }
 	// );
 
-	
+
+	// Model and CWE list init not required for OnPremise and Cloud inference
+
 	await Promise.all([
 		modelInit(),
 		cweListInit()
@@ -429,7 +451,7 @@ export class LocalInference{
 }
 
 
-export class OnPremiseInference{
+export class RemoteInference{
 
 	/**
 	 * Takes a list of all functions in the document, sends them to the remote inference engine and returns the results
@@ -443,12 +465,12 @@ export class OnPremiseInference{
 		signal.abort;
 		var start = new Date().getTime();
 		
-		debugMessage(DebugTypes.info, "Sending line detection request to " + config.inferenceURL + ((config.gpu)? "/v1/gpu/predict" : "/v1/cpu/predict"));
+		debugMessage(DebugTypes.info, "Sending line detection request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? remoteInferenceURLs.endpoints.line.gpu : remoteInferenceURLs.endpoints.line.cpu));
 		progressEmitter.emit('update', ProgressStages.line);
 
 		await axios({
 			method: "post",
-			url: config.inferenceURL + ((config.gpu)? "/v1/gpu/predict" : "/v1/cpu/predict"),
+			url: ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? "/api/v1/gpu/predict" : "/api/v1/cpu/predict"),
 			data: jsonObject,
 			signal: signal.signal,
 			headers: { "Content-Type":"application/json"},
@@ -480,11 +502,11 @@ export class OnPremiseInference{
 		signal.abort;
 		var start = new Date().getTime();
 
-		debugMessage(DebugTypes.info, "Sending CWE detection request to " + config.inferenceURL + ((config.gpu)? "/v1/gpu/cwe" : "/v1/cpu/cwe"));
+		debugMessage(DebugTypes.info, "Sending CWE detection request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? remoteInferenceURLs.endpoints.cwe.gpu : remoteInferenceURLs.endpoints.cwe.cpu));
 		progressEmitter.emit('update', ProgressStages.cwe);
 		await axios({
 			method: "post",
-			url: config.inferenceURL + ((config.gpu)? "/v1/gpu/cwe" : "/v1/cpu/cwe"),
+			url: ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? "/api/v1/gpu/cwe" : "/api/v1/cpu/cwe"),
 			data: jsonObject,
 			signal: signal.signal,
 			headers: { "Content-Type":"application/json"},
@@ -517,12 +539,12 @@ export class OnPremiseInference{
 		signal.abort;
 		var start = new Date().getTime();
 
-		debugMessage(DebugTypes.info, "Sending security score request to " + config.inferenceURL + ((config.gpu)? "/v1/gpu/sev" : "/v1/cpu/sev"));
+		debugMessage(DebugTypes.info, "Sending security score request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? remoteInferenceURLs.endpoints.sev.gpu : remoteInferenceURLs.endpoints.sev.cpu));
 		progressEmitter.emit('update', ProgressStages.sev);
 
 		await axios({
 			method: "post",
-			url: config.inferenceURL + ((config.gpu)? "/v1/gpu/sev" : "/v1/cpu/sev"),
+			url: ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? "/api/v1/gpu/sev" : "/api/v1/cpu/sev"),
 			data: jsonObject,
 			signal: signal.signal,
 			headers: { "Content-Type":"application/json"},
@@ -540,20 +562,6 @@ export class OnPremiseInference{
 				debugMessage(DebugTypes.error, response);
 				return Promise.reject(response);
 			});
-	}
-}
-
-export class CloudInference{
-	public async line(list: Array<string>): Promise<any>{
-		console.log("Line detection");
-	}
-
-	public async cwe(list: Array<string>): Promise<any>{
-		console.log("CVE detection");
-	}
-
-	public async sev(list: Array<string>): Promise<any>{
-		console.log("Severity detection");
 	}
 }
 
@@ -611,7 +619,7 @@ async function extractFunctions(){
 		debugMessage(DebugTypes.error, "No symbols found after 3 seconds");
 		return Promise.reject("No symbols found");
 	} else{
-		debugMessage(DebugTypes.info, "Found " + symbols.length + " symbols in " + (end - start) + " milliseconds");
+		debugMessage(DebugTypes.info, "Found " + symbols.length + " symbols in " + (end - start) + " ms");
 	}
 
 	symbols.forEach(element => {
@@ -725,10 +733,12 @@ async function analysis(){
 	}
 	);
 
+	var start = new Date().getTime();
+
 	progressEmitter.emit('update', ProgressStages.line);
 
 	await inferenceMode.line(functionSymbols.functions).then(() => {
-		debugMessage(DebugTypes.info, "Finished analysing lines");
+		debugMessage(DebugTypes.info, "Line vulnerabilities retrieved");
 
 		predictions.line.batch_vul_pred.forEach((element: any, i: number) => {
 			if(element === 1){
@@ -744,34 +754,54 @@ async function analysis(){
 
 	progressEmitter.emit('update', ProgressStages.cwe);
 
-	await inferenceMode.cwe(functionSymbols.vulnFunctions).then(() => {
-		debugMessage(DebugTypes.info, "CWE type retrieved");
-	}
-	).catch((err: string) => {
-		debugMessage(DebugTypes.error, err);
-		return Promise.reject(err);
-	}
-	);
+	// await inferenceMode.cwe(functionSymbols.vulnFunctions).then(() => {
+	// 	debugMessage(DebugTypes.info, "CWE type retrieved");
+	// }
+	// ).catch((err: string) => {
+	// 	debugMessage(DebugTypes.error, err);
+	// 	return Promise.reject(err);
+	// }
+	// );
 
 	progressEmitter.emit('update', ProgressStages.sev);
 
-	await inferenceMode.sev(functionSymbols.vulnFunctions).then(() => {
-		debugMessage(DebugTypes.info, "Severity score retrieved");	}
+	// await inferenceMode.sev(functionSymbols.vulnFunctions).then(() => {
+	// 	debugMessage(DebugTypes.info, "Severity score retrieved");	}
+	// ).catch((err: string) => {
+	// 	debugMessage(DebugTypes.error, err);
+	// 	return Promise.reject(err);
+	// }
+	// );
+
+	await Promise.all([
+		inferenceMode.cwe(functionSymbols.vulnFunctions),
+		inferenceMode.sev(functionSymbols.vulnFunctions)
+	]).then(() => {
+		debugMessage(DebugTypes.info, "CWE type and severity score retrieved");
+	}
 	).catch((err: string) => {
 		debugMessage(DebugTypes.error, err);
 		return Promise.reject(err);
 	}
 	);
 
+
 	progressEmitter.emit('end', ProgressStages.analysis);
 
+	var end = new Date().getTime();
+
+	debugMessage(DebugTypes.info, "Analysis completed in " + (end - start) + "ms");
+
 	return Promise.resolve();
-
-	// Can promise all for cwe and sev for higher performance but error messages are consolidated
-
 }
 
-function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCollection: vscode.DiagnosticCollection){
+/**
+ * Takes all the predictions results and constructs diagnostics for each vulnerable function
+ * @param doc TextDocument to display diagnostic collection in
+ * @param diagnosticCollection DiagnosticCollection to set diagnostics for
+ */
+
+async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCollection: vscode.DiagnosticCollection){
 
 	if(doc === undefined){
 		debugMessage(DebugTypes.error, "No document found to construct diagnostics");
@@ -780,14 +810,23 @@ function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCo
 
 	let vulCount = 0;
 	let diagnostics: vscode.Diagnostic[] = [];
-	
+
+	let cweList: any[] = [];
+
+	predictions.line.batch_vul_pred.forEach((element: any, i: number) => {
+		if(element === 1){
+			cweList.push([predictions.cwe.cwe_type[vulCount], predictions.cwe.cwe_id[vulCount].substring(4)]);
+			vulCount++;
+		}
+	});
+
+	await getCWEData(cweList);
+
+	vulCount = 0;
 	functionSymbols.range.forEach((value: any, i: number) => {
 		if(predictions.line.batch_vul_pred[i] === 1){
 			debugMessage(DebugTypes.info, "Constructing diagnostic for function: " + i);
 
-			// console.log(predictions.line);
-			// console.log(predictions.sev);
-			// console.log(predictions.cwe);
 			
 			// functionSymbols.* contains all functions
 			// predictions.line contains all functions
@@ -797,6 +836,9 @@ function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCo
 			const cweIDProb = predictions.cwe.cwe_id_prob[vulCount];
 			const cweType = predictions.cwe.cwe_type[vulCount];
 			const cweTypeProb = predictions.cwe.cwe_type_prob[vulCount];
+
+			let cweDescription = predictions.cwe.descriptions[vulCount];
+			const cweName = predictions.cwe.names[vulCount];
 
 			const sevScore = predictions.sev.batch_sev_score[vulCount];
 			const sevClass = predictions.sev.batch_sev_class[vulCount];
@@ -824,15 +866,6 @@ function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCo
 
 			const url = "https://cwe.mitre.org/data/definitions/" + cweID.substring(4) + ".html";
 
-			let cweData : any[] = [];
-
-			getCWEData([[cweType,cweID.substring(4)]]).then((cweData: any) => {
-				cweData = cweData;
-			}).catch((err: string) => {
-				debugMessage(DebugTypes.error, err);
-			}
-			);
-
 			for(var i = 0; i < config.maxLines; i++){
 				
 				const vulnLine = lineScoreShiftMapped[i][0];
@@ -843,10 +876,20 @@ function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCo
 
 				let diagMessage = "";
 
+				cweDescription = "";
+
+
 				switch(config.informationLevel){
 					case InformationLevels.core: {
-						diagMessage = "Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " | CWE: " + cweID.substring(4) + " " +( (cweData === undefined || "") ? "" : "(" + cweData + ") ")  + "| Type: " + cweType;
+						diagMessage = "Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " | CWE: " + cweID.substring(4) + " " + ((cweName === undefined || "") ? "" : ("(" + cweName + ") ") )  + "| Type: " + cweType;
 						break;
+					}
+					case InformationLevels.verbose: {
+						diagMessage = "[" + lineScoreShiftMapped[i][1].toString().match(/^\d+(?:\.\d{0,2})?/) + "] Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " (" + sevClass +")" +" | " + "[" + cweIDProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " +"CWE: " + cweID.substring(4) + " " + ((cweName === undefined || "") ? "" : ("(" + cweName + ") ") )  + "| " + "[" + cweTypeProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " + "Type: " + cweType;
+						break;
+					}
+					case InformationLevels.minimal: {
+						diagMessage = "Line " + (vulnLine) + " may be vulnerable with " + cweID + " (Severity: " + sevClass + ")";
 					}
 				};
 
@@ -861,7 +904,7 @@ function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCo
 					target: vscode.Uri.parse(url)
 				};
 
-				diagnostic.source = "AiBugHunter";
+				diagnostic.source = "AIBugHunter";
 				
 				diagnostics.push(diagnostic);
 			}
@@ -871,9 +914,72 @@ function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCo
 
 	diagnosticCollection.set(doc.uri, diagnostics);
 	
-	return diagnostics;
+	return 0;
 }
 
 async function getCWEData(list:any){
-	return "Not Implemented";
+	try{
+		const data = await fsa.readFile(config.xmlPath);
+		debugMessage(DebugTypes.info, "CWE XML file read");
+		try{
+			debugMessage(DebugTypes.info, "Parsing CWE XML file");
+			const parsed:any = await new Promise((resolve, reject) => parser.parseString(data, (err: any, result: any) => {
+				if (err) {reject(err);}
+				else {resolve(result);}
+			  }));
+
+			  if(!parsed){
+				  debugMessage(DebugTypes.error, "Error parsing CWE XML file");
+			  } else{
+				
+				debugMessage(DebugTypes.info, "Parsed CWE XML file. Getting data");
+				const weaknessDescriptions: any[] = [];
+				const weaknessNames: any[] = [];
+
+				list.forEach((element:any, i: number) => {
+					
+					let weakness: any;
+					let weaknessDescription: string = "";
+					let weaknessName: string = "";
+
+					switch(element[0]){
+						case "Base": {
+							weakness = parsed.Weakness_Catalog.Weaknesses[0].Weakness.find((obj:any) =>{
+								return obj.$.ID === element[1].toString();
+							});
+							weaknessDescription = weakness.Description[0];
+							break;
+						}
+						case "Category": {
+							weakness = parsed.Weakness_Catalog.Categories[0].Category.find((obj:any) =>{
+								return obj.$.ID === element[1].toString();
+							});
+							weaknessDescription = weakness.Summary[0];
+							break;
+						}
+					}
+
+					weaknessName = weakness.$.Name;
+					
+					// console.log(predictions.cwe);
+
+					weaknessDescriptions.push(weaknessDescription);
+					weaknessNames.push(weaknessName);
+
+				});
+				
+				predictions.cwe.descriptions = weaknessDescriptions;
+				predictions.cwe.names = weaknessNames;
+
+				return Promise.resolve();
+			} 
+		} catch(err){
+			debugMessage(DebugTypes.error, "Error Parsing CWE XML file");
+			return Promise.reject(err);
+		}
+	
+	} catch(err:any){
+		debugMessage(DebugTypes.error, "Error while reading CWE XML file: " + err);
+		return Promise.reject(err);
+	}
 }

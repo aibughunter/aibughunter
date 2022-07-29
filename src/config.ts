@@ -3,7 +3,7 @@ import {DiagnosticSeverity } from "vscode";
 export interface Config {
     inferenceMode: InferenceModes;
     gpu: boolean;
-    inferenceURL: string;
+    onPremiseInferenceURL: string;
     informationLevel: InformationLevels;
     showDescription: boolean;
     diagnosticSeverity?: DiagnosticSeverity;
@@ -30,7 +30,7 @@ export enum InferenceModes {
 }
 
 export enum InformationLevels {
-    verborse = "Verborse",
+    verbose = "Verbose",
     core = "Core",
     minimal = "Minimal"
 }
@@ -79,3 +79,31 @@ export interface Functions{
     shift: Array<Array<number>>;
     range: any;
 }
+
+interface InferenceExecutionProvider{
+    cpu: string;
+    gpu: string;
+}
+
+interface RemoteInferenceURLs{
+    cloudInferenceURL: string;
+    endpoints: Record<string, InferenceExecutionProvider>;
+}
+
+export const remoteInferenceURLs: RemoteInferenceURLs = {
+    cloudInferenceURL: "http://118.138.243.79:5000",
+    endpoints: {
+        "line":{
+            cpu: "/api/v1/cpu/predict",
+            gpu: "/api/v1/gpu/predict"
+        },
+        "cwe":{
+            cpu: "/api/v1/cpu/cwe",
+            gpu: "/api/v1/gpu/cwe"
+        },
+        "sev":{
+            cpu: "/api/v1/cpu/sev",
+            gpu: "/api/v1/gpu/sev"
+        }
+    }
+};
