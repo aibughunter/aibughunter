@@ -4,6 +4,7 @@ import { EventEmitter } from 'stream';
 import { robertaProcessing } from 'tokenizers/bindings/post-processors';
 import { setFlagsFromString } from 'v8';
 import * as vscode from 'vscode';
+import { MessageChannel } from 'worker_threads';
 import {Config, DebugTypes, DownloadURLs, Functions, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages} from './config';
 
 const axios = require('axios');
@@ -40,22 +41,50 @@ const progressEmitter = new Progress();
 
 export async function activate(context: vscode.ExtensionContext) {
 	
-	let disposable = vscode.commands.registerCommand('aibughunter.helloWorld', () => {
-		vscode.window.showInformationMessage('Hello World from AIBugHunter!');
-	});
+	progressEmitter.emit('init', ProgressStages.extInit);
 
-	debugMessage(DebugTypes.info, "Extension activated");
+	let noerror = false;
 
-	analysis().then(() => {
-		debugMessage(DebugTypes.info, "Analysis finished");
-		progressEmitter.emit('end', ProgressStages.analysisEnd);
+	while(!noerror){
+		await init().then(() => {
+			noerror = true;
+		}
+		).catch(err => {
+			debugMessage(DebugTypes.error, err);
+			debugMessage(DebugTypes.info, "Error occured during initialisation. Retrying...");
+		}
+		);
 	}
-	).catch(err => {
-		debugMessage(DebugTypes.error, err);
-		debugMessage(DebugTypes.error, "Analysis failed");
-		progressEmitter.end(ProgressStages.error);
+
+	progressEmitter.emit('end', ProgressStages.extInitEnd);
+
+	debugMessage(DebugTypes.info, "Extension initialised");
+
+	// Initial analysis after initialisation, may wrap this in extInitend event
+
+	debugMessage(DebugTypes.info, "Running initial analysis");
+
+	const activeDocument = vscode.window.activeTextEditor?.document ?? undefined;
+
+	if(activeDocument){
+		analysis().then(() => {
+			debugMessage(DebugTypes.info, "Analysis finished");
+			progressEmitter.emit('end', ProgressStages.analysisEnd);
+			const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
+			context.subscriptions.push(diagnosticCollection);
+			constructDiagnostics(activeDocument, diagnosticCollection);
+			// console.log(diagnostics);
+			context.subscriptions.push(diagnosticCollection);
+		}
+		).catch(err => {
+			debugMessage(DebugTypes.error, err);
+			debugMessage(DebugTypes.error, "Analysis failed");
+			progressEmitter.end(ProgressStages.error);
+		}
+		);
 	}
-	);
+
+	// --------------------------------------------------------------------------
 
 	progressEmitter.on('init', (stage:ProgressStages) => {
 
@@ -78,20 +107,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 	);
 
-	progressEmitter.emit('init', ProgressStages.extInit);
-
-	var noerror = false;
-
-	while(!noerror){
-		await init().then(() => {
-			noerror = true;
-		}
-		).catch(err => {
-			debugMessage(DebugTypes.error, err);
-			debugMessage(DebugTypes.info, "Error occured during initialisation. Retrying...");
-		}
-		);
-	}
 
 	progressEmitter.emit('end', ProgressStages.extInitEnd);
 
@@ -123,7 +138,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		// console.log(e);
 	});
 
-	context.subscriptions.push(disposable);
+	// context.subscriptions.push(disposable);
 }
 
 
@@ -143,13 +158,19 @@ function interfaceInit(){
 		inferenceURL: vsconfig.inference.inferenceServerURL,
 		informationLevel: vsconfig.diagnostics.informationLevel,
 		showDescription: vsconfig.diagnostics.showDescription,
-		highlightType: vsconfig.diagnostics.highlightSeverityType,
 		maxLines: vsconfig.diagnostics.maxNumberOfLines,
 		delay: vsconfig.diagnostics.delayBeforeAnalysis,
 		modelDir: vsconfig.model.downloadLocation,
 		cweDir: vsconfig.cwe.downloadLocation,
 		resSubDir: vsconfig.resources.subDirectory,
 	};
+
+	switch(vsconfig.diagnostics.highlightSeverityType){
+		case "Error": config.diagnosticSeverity = vscode.DiagnosticSeverity.Error; break;
+		case "Warning": config.diagnosticSeverity = vscode.DiagnosticSeverity.Warning; break;
+		case "Information": config.diagnosticSeverity = vscode.DiagnosticSeverity.Information; break;
+		case "Hint": config.diagnosticSeverity = vscode.DiagnosticSeverity.Hint; break;
+	}
 
 	predictions = {
 		line: Object(),
@@ -554,6 +575,7 @@ export class CloudInference{
 async function extractFunctions(){
 
 	var editor = vscode.window.activeTextEditor;
+
 	if(editor === undefined){
 		debugMessage(DebugTypes.error, "No editor found");
 		return Promise.reject("No editor found");
@@ -631,6 +653,7 @@ async function extractFunctions(){
  */
 function removeComments(text:string): string{
 
+	let cleanText = text;
 	let newline = "\n";
 
 	// For Block Comments (/* */)
@@ -648,7 +671,9 @@ function removeComments(text:string): string{
 		let lineEnd = text.substring(0, end).split("\n").length;
 		let diff = lineEnd - lineStart;
 
-		text = text.replace(match[0], newline.repeat(diff));
+		// console.log("Line: " + lineStart + " To " + lineEnd);
+
+		cleanText = cleanText.replace(match[0], newline.repeat(diff));
 	}
 
 	// For line comments (//)
@@ -664,10 +689,10 @@ function removeComments(text:string): string{
 		let lineEnd = text.substring(0, end).split("\n").length;
 		let diff = lineEnd - lineStart;
 
-		text = text.replace(match[0], newline.repeat(diff));
+		cleanText = cleanText.replace(match[0], newline.repeat(diff));
 	}
 
-	return text;
+	return cleanText;
 }
 
 /**
@@ -676,6 +701,9 @@ function removeComments(text:string): string{
  * @returns Text without blank lines
  */
 function removeBlankLines(text:string): [string,number[]]{
+
+	console.log(text);
+
 	let lines = text.split("\n");
 	let newLines = [];
 	let shiftMap = [];
@@ -753,6 +781,114 @@ async function analysis(){
 
 }
 
-function constructDiagnostics(){
+function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCollection: vscode.DiagnosticCollection){
+
+	if(doc === undefined){
+		debugMessage(DebugTypes.error, "No document found to construct diagnostics");
+		return 1;
+	}
+
+	let vulCount = 0;
+	let diagnostics: vscode.Diagnostic[] = [];
+
+	console.log(functionSymbols);
+	console.log(predictions);
 	
+	functionSymbols.range.forEach((value: any, i: number) => {
+		if(predictions.line.batch_vul_pred[i] === 1){
+			debugMessage(DebugTypes.info, "Constructing diagnostic for function: " + i);
+
+			// console.log(predictions.line);
+			// console.log(predictions.sev);
+			// console.log(predictions.cwe);
+			
+			// functionSymbols.* contains all functions
+			// predictions.line contains all functions
+			// predictions.cwe and predictions.sev contain only vulnerable functions
+
+			const cweID = predictions.cwe.cwe_id[vulCount];
+			const cweIDProb = predictions.cwe.cwe_id_prob[vulCount];
+			const cweType = predictions.cwe.cwe_type[vulCount];
+			const cweTypeProb = predictions.cwe.cwe_type_prob[vulCount];
+
+			const sevScore = predictions.sev.batch_sev_score[vulCount];
+			const sevClass = predictions.sev.batch_sev_class[vulCount];
+
+			const lineScores = predictions.line.batch_line_scores[i];
+			
+			let lineScoreShiftMapped: number[][] = [];
+
+			functionSymbols.shift[i].forEach((element:number) =>{
+				lineScores.splice(element, 0, 0);
+			});
+
+			let lineStart = functionSymbols.range[i].start.line;
+
+			lineScores.forEach((element: number) => {
+				lineScoreShiftMapped.push([lineStart, element]);
+				lineStart++;
+			});
+
+			// Sort by prediction score
+			lineScoreShiftMapped.sort((a: number[], b: number[]) => {
+				return b[1] - a[1];
+			}
+			);
+
+
+			const url = "https://cwe.mitre.org/data/definitions/" + cweID.substring(4) + ".html";
+
+			let cweData : any[] = [];
+
+			getCWEData([[cweType,cweID.substring(4)]]).then((cweData: any) => {
+				cweData = cweData;
+			}).catch((err: string) => {
+				debugMessage(DebugTypes.error, err);
+			}
+			);
+
+			for(var i = 0; i < config.maxLines; i++){
+				
+				const vulnLine = lineScoreShiftMapped[i][0];
+
+				const lines = doc?.getText().split("\n") ?? [];
+
+				let line = doc?.lineAt(vulnLine);
+
+				let diagMessage = "";
+
+				switch(config.informationLevel){
+					case InformationLevels.core: {
+						diagMessage = "Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " | CWE: " + cweID.substring(4) + " " +( (cweData === undefined || "") ? "" : "(" + cweData + ") ")  + "| Type: " + cweType;
+						break;
+					}
+				};
+
+				const diagnostic = new vscode.Diagnostic(
+					new vscode.Range(vulnLine, doc?.lineAt(vulnLine).firstNonWhitespaceCharacterIndex, vulnLine, line.text.length),
+					diagMessage,
+					config.diagnosticSeverity ?? vscode.DiagnosticSeverity.Error
+				);
+
+				diagnostic.code = {
+					value: "More Details",
+					target: vscode.Uri.parse(url)
+				};
+
+				diagnostic.source = "AiBugHunter";
+
+				
+				diagnostics.push(diagnostic);
+			}
+			vulCount++;
+		}
+	});
+
+	diagnosticCollection.set(doc.uri, diagnostics);
+	
+	return diagnostics;
+}
+
+async function getCWEData(list:any){
+	return "Not Implemented";
 }

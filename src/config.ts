@@ -1,10 +1,12 @@
+import {DiagnosticSeverity } from "vscode";
+
 export interface Config {
     inferenceMode: InferenceModes;
     gpu: boolean;
     inferenceURL: string;
     informationLevel: InformationLevels;
     showDescription: boolean;
-    highlightType: HighlightTypes;
+    diagnosticSeverity?: DiagnosticSeverity;
     maxLines: number;
     delay: number;
     modelDir: string;
