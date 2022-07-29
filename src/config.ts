@@ -64,7 +64,8 @@ export enum ProgressStages{
     sev = "sev",
     analysisEnd = "analysisEnd",
     diagnostic = "diagnostic",
-    error = "error"
+    error = "error",
+    nodoc = "nodoc",
 }
 
 export interface Predictions {

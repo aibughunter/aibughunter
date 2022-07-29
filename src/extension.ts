@@ -48,7 +48,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Initial analysis after initialisation, may wrap this in extInitend event
 
 
-	const activeDocument = vscode.window.activeTextEditor?.document ?? undefined;
+	
 	
 	const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
 	context.subscriptions.push(diagnosticCollection);
@@ -62,6 +62,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	progressEmitter.on('init', async (stage:ProgressStages) => {
 
+		const activeDocument = vscode.window.activeTextEditor?.document ?? undefined;
 
 		progressHandler(stage);
 
@@ -85,10 +86,12 @@ export async function activate(context: vscode.ExtensionContext) {
 				break;
 			case ProgressStages.analysis:
 				if(activeDocument){
-					analysis().then(() => {
+					analysis(activeDocument).then(() => {
+
 						debugMessage(DebugTypes.info, "Analysis finished");
+
 						progressEmitter.emit('end', ProgressStages.analysisEnd);
-	
+
 						constructDiagnostics(activeDocument, diagnosticCollection);
 					}
 					).catch(err => {
@@ -98,7 +101,10 @@ export async function activate(context: vscode.ExtensionContext) {
 					}
 					);
 					break;
-				}	
+				}else{
+					debugMessage(DebugTypes.error, "No active document");
+					progressEmitter.emit('end', ProgressStages.nodoc);
+				}
 		}
 	}
 	);
@@ -127,7 +133,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Reinitialise interfaces on configuration modification
 	vscode.workspace.onDidChangeConfiguration((e) => {
 		debugMessage(DebugTypes.info, "Configuration Changed");
-		interfaceInit();
+		progressEmitter.emit('init', ProgressStages.extInit);
 	});
 
 	// vscode.workspace.onDidOpenTextDocument((e) => {
@@ -143,8 +149,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	vscode.window.onDidChangeActiveTextEditor((e) => {
 		debugMessage(DebugTypes.info, "Active text editor changed");
 		if(e?.document.languageId === 'cpp'){
-			interfaceInit();
-			progressEmitter.emit('init', ProgressStages.analysis);
+			progressEmitter.emit('init', ProgressStages.extInit);
 		}
 	});
 	// context.subscriptions.push(disposable);
@@ -424,7 +429,8 @@ async function progressHandler(stage: ProgressStages){
 				switch(stage){
 					case ProgressStages.extInitEnd: progress.report({message: "Initialisation complete", increment: 100}); break;
 					case ProgressStages.analysisEnd: progress.report({message: "Analysis complete", increment: 100}); break;
-					case ProgressStages.error: progress.report({message: "Error occured - Terminating...", increment: 100}); break;
+					case ProgressStages.error: progress.report({message: "Error occured. Terminating...", increment: 100}); break;
+					case ProgressStages.nodoc: progress.report({message: "No document found. Skipping...", increment: 100}); break;
 				}
 				setTimeout(() => {
 					resolve();
@@ -569,15 +575,16 @@ export class RemoteInference{
  * Extract list of functions from the current editor using DocumentSymbolProvider
  * @returns Promise that rejects on error
  */
-async function extractFunctions(){
+async function extractFunctions(document:vscode.TextDocument){
 
-	var editor = vscode.window.activeTextEditor;
+	// var editor = vscode.window.activeTextEditor;
 
-	if(editor === undefined){
-		debugMessage(DebugTypes.error, "No editor found");
-		return Promise.reject("No editor found");
-	}
-	var text = editor.document.getText();
+	// if(editor === undefined){
+	// 	debugMessage(DebugTypes.error, "No editor found");
+	// 	return Promise.reject("No editor found");
+	// }
+
+	var text = document.getText();
 	var lines = text.split("\n");
 
 	if(lines.length === 0){
@@ -715,16 +722,24 @@ function removeBlankLines(text:string): [string,number[]]{
 	return [newLines.join("\n"), shiftMap];
 }
 
-async function analysis(){
+/**
+ * Entry point for vulnerability analysis
+ * Contains three steps:
+ * 1. Extract functions from the current editor
+ * 2. Send list of functions to the inference engine to get vulnerability information and store it in predictions object
+ * 3. Collect vulnerable functions only and send them to CWE and Severity inference engines and store it in predictions object
+ * @param document TextDocument to extract text/function from
+ * @returns 
+ */
 
-	// console.log(vscode.window.activeTextEditor?.document.getText());
+async function analysis(document: vscode.TextDocument){
 
-	if(vscode.window.activeTextEditor?.document.getText() === ""){
+	if(document.getText() === ""){
 		debugMessage(DebugTypes.error, "Document is empty, aborting analysis");
 		return Promise.reject("Document is empty, aborting analysis");
 	}
 
-	await extractFunctions().then(() => {
+	await extractFunctions(document).then(() => {
 		debugMessage(DebugTypes.info, "Finished extracting functions");
 	}
 	).catch(err => {
@@ -800,7 +815,6 @@ async function analysis(){
  * @param doc TextDocument to display diagnostic collection in
  * @param diagnosticCollection DiagnosticCollection to set diagnostics for
  */
-
 async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCollection: vscode.DiagnosticCollection){
 
 	if(doc === undefined){
@@ -917,14 +931,22 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 	return 0;
 }
 
+/**
+ * Takes a list of CWE Types and CWE IDs and fetches the CWE data from the CWE xml
+ * It stores the name and description into new fields in object: predictions.cwe.names and predictions.cwe.descriptions
+ * @param list List of CWE IDs ( [[CWE Type, CWE ID]] )
+ * @returns Promise that resolves when successfully retrieved CWE data from XML, rejects otherwise
+ */
 async function getCWEData(list:any){
 	try{
 		const data = await fsa.readFile(config.xmlPath);
 		debugMessage(DebugTypes.info, "CWE XML file read");
+
 		try{
 			debugMessage(DebugTypes.info, "Parsing CWE XML file");
+			
 			const parsed:any = await new Promise((resolve, reject) => parser.parseString(data, (err: any, result: any) => {
-				if (err) {reject(err);}
+				if (err) {reject(err); return Promise.reject(err);}
 				else {resolve(result);}
 			  }));
 
