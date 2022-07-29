@@ -59,30 +59,32 @@ export async function activate(context: vscode.ExtensionContext) {
 	progressEmitter.emit('end', ProgressStages.extInitEnd);
 
 	debugMessage(DebugTypes.info, "Extension initialised");
-
+	vscode.window.showInformationMessage('AIBugHunter: Extension Initialised!');
 	// Initial analysis after initialisation, may wrap this in extInitend event
 
-	debugMessage(DebugTypes.info, "Running initial analysis");
 
 	const activeDocument = vscode.window.activeTextEditor?.document ?? undefined;
 
-	if(activeDocument){
-		analysis().then(() => {
-			debugMessage(DebugTypes.info, "Analysis finished");
-			progressEmitter.emit('end', ProgressStages.analysisEnd);
-			const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
-			context.subscriptions.push(diagnosticCollection);
-			constructDiagnostics(activeDocument, diagnosticCollection);
-			// console.log(diagnostics);
-			context.subscriptions.push(diagnosticCollection);
-		}
-		).catch(err => {
-			debugMessage(DebugTypes.error, err);
-			debugMessage(DebugTypes.error, "Analysis failed");
-			progressEmitter.end(ProgressStages.error);
-		}
-		);
-	}
+	// if(activeDocument){
+
+	// 	progressEmitter.emit('init', ProgressStages.analysis);
+
+	// 	analysis().then(() => {
+	// 		debugMessage(DebugTypes.info, "Analysis finished");
+	// 		const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
+	// 		context.subscriptions.push(diagnosticCollection);
+	// 		constructDiagnostics(activeDocument, diagnosticCollection);
+	// 		// console.log(diagnostics);
+	// 		// context.subscriptions.push(diagnosticCollection);
+	// 	}
+	// 	).catch(err => {
+	// 		debugMessage(DebugTypes.error, err);
+	// 		debugMessage(DebugTypes.error, "Analysis failed");
+	// 		progressEmitter.end(ProgressStages.error);
+	// 	}
+	// 	);
+	// }
+
 
 	// --------------------------------------------------------------------------
 
@@ -96,6 +98,10 @@ export async function activate(context: vscode.ExtensionContext) {
 			analysis().then(() => {
 				debugMessage(DebugTypes.info, "Analysis finished");
 				progressEmitter.emit('end', ProgressStages.analysisEnd);
+
+				const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
+				context.subscriptions.push(diagnosticCollection);
+				constructDiagnostics(activeDocument, diagnosticCollection);
 			}
 			).catch(err => {
 				debugMessage(DebugTypes.error, err);
@@ -107,11 +113,10 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 	);
 
+	debugMessage(DebugTypes.info, "Running initial analysis");
 
-	progressEmitter.emit('end', ProgressStages.extInitEnd);
+	progressEmitter.emit('init', ProgressStages.analysis);
 
-	debugMessage(DebugTypes.info, "Extension initialised");
-	vscode.window.showInformationMessage('AIBugHunter: Extension Initialised!');
 
 	let wait: NodeJS.Timeout;
 
@@ -391,7 +396,7 @@ async function progressHandler(stage: ProgressStages){
 	}, (progress, token) => {
 
 		token.onCancellationRequested(() => {
-			console.log("User canceled the long running operation");
+			debugMessage(DebugTypes.info, "User canceled the running operation");
 		});
 
 		switch(stage){
@@ -601,22 +606,25 @@ async function extractFunctions(){
 	// Attempt to get symbols from the current document 3 times, if it fails, then reject
 	// This is to avoid the edge case where the DocumentSymbolProvider is not yet ready when the initial analysis is requested
 
-	let start = new Date().getTime();
 
 	let symbols: vscode.DocumentSymbol[] = [];
-	for(var i = 0; i < 3; i++){
+
+	var attempts = 0;
+
+	  let start = new Date().getTime();
+	  var period = new Date().getTime();
+	  while(symbols === undefined || period - start < 3000){
 		symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>('vscode.executeDocumentSymbolProvider', uri);
-		if(symbols === undefined){
-			debugMessage(DebugTypes.error, "No symbols found, retrying... [Attempt " + (i+1) + "]");
-		} else{
-			continue;
+		if(symbols !== undefined){
+			break;
 		}
-	}
+		period = new Date().getTime();
+	  }
 
 	let end = new Date().getTime();
 
 	if(symbols === undefined){
-		debugMessage(DebugTypes.error, "No symbols found after 3 attempts");
+		debugMessage(DebugTypes.error, "No symbols found after 3 seconds");
 		return Promise.reject("No symbols found");
 	} else{
 		debugMessage(DebugTypes.info, "Found " + symbols.length + " symbols in " + (end - start) + " milliseconds");
@@ -701,8 +709,6 @@ function removeComments(text:string): string{
  * @returns Text without blank lines
  */
 function removeBlankLines(text:string): [string,number[]]{
-
-	console.log(text);
 
 	let lines = text.split("\n");
 	let newLines = [];
@@ -790,9 +796,6 @@ function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCo
 
 	let vulCount = 0;
 	let diagnostics: vscode.Diagnostic[] = [];
-
-	console.log(functionSymbols);
-	console.log(predictions);
 	
 	functionSymbols.range.forEach((value: any, i: number) => {
 		if(predictions.line.batch_vul_pred[i] === 1){
@@ -876,7 +879,6 @@ function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCo
 				};
 
 				diagnostic.source = "AiBugHunter";
-
 				
 				diagnostics.push(diagnostic);
 			}
