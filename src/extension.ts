@@ -41,22 +41,6 @@ const progressEmitter = new Progress();
 
 export async function activate(context: vscode.ExtensionContext) {
 	
-	progressEmitter.emit('init', ProgressStages.extInit);
-
-	let noerror = false;
-
-	while(!noerror){
-		await init().then(() => {
-			noerror = true;
-		}
-		).catch(err => {
-			debugMessage(DebugTypes.error, err);
-			debugMessage(DebugTypes.info, "Error occured during initialisation. Retrying...");
-		}
-		);
-	}
-
-	progressEmitter.emit('end', ProgressStages.extInitEnd);
 
 	debugMessage(DebugTypes.info, "Extension initialised");
 	vscode.window.showInformationMessage('AIBugHunter: Extension Initialised!');
@@ -65,68 +49,68 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const activeDocument = vscode.window.activeTextEditor?.document ?? undefined;
 
-	// if(activeDocument){
+	/**
+	 * Any init event will be handled here
+	 * If extInit, then initialise extension (download necessary files, etc)
+	 * If analysis, then start analysis of active document
+	 * @param stage Stage of progress
+	 */
 
-	// 	progressEmitter.emit('init', ProgressStages.analysis);
-
-	// 	analysis().then(() => {
-	// 		debugMessage(DebugTypes.info, "Analysis finished");
-	// 		const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
-	// 		context.subscriptions.push(diagnosticCollection);
-	// 		constructDiagnostics(activeDocument, diagnosticCollection);
-	// 		// console.log(diagnostics);
-	// 		// context.subscriptions.push(diagnosticCollection);
-	// 	}
-	// 	).catch(err => {
-	// 		debugMessage(DebugTypes.error, err);
-	// 		debugMessage(DebugTypes.error, "Analysis failed");
-	// 		progressEmitter.end(ProgressStages.error);
-	// 	}
-	// 	);
-	// }
-
-
-	// --------------------------------------------------------------------------
-
-	progressEmitter.on('init', (stage:ProgressStages) => {
+	progressEmitter.on('init', async (stage:ProgressStages) => {
 
 		progressHandler(stage);
-		
-		if(stage === ProgressStages.analysis){
-			debugMessage(DebugTypes.info, "Analysis started");
-			
-			analysis().then(() => {
-				debugMessage(DebugTypes.info, "Analysis finished");
-				progressEmitter.emit('end', ProgressStages.analysisEnd);
 
-				const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
-				context.subscriptions.push(diagnosticCollection);
-				constructDiagnostics(activeDocument, diagnosticCollection);
-			}
-			).catch(err => {
-				debugMessage(DebugTypes.error, err);
-				debugMessage(DebugTypes.error, "Analysis failed");
-				progressEmitter.end(ProgressStages.error);
-			}
-			);
+		switch(stage){
+			case ProgressStages.extInit:
+				let noerror = false;
+
+				while(!noerror){
+					await init().then(() => {
+						noerror = true;
+					}
+					).catch(err => {
+						debugMessage(DebugTypes.error, err);
+						debugMessage(DebugTypes.info, "Error occured during initialisation. Retrying...");
+					}
+					);
+				}
+				progressEmitter.emit('end', ProgressStages.extInitEnd);
+				debugMessage(DebugTypes.info, "Running initial analysis");
+				progressEmitter.emit('init', ProgressStages.analysis);
+				break;
+			case ProgressStages.analysis:
+				if(activeDocument){
+					analysis().then(() => {
+						debugMessage(DebugTypes.info, "Analysis finished");
+						progressEmitter.emit('end', ProgressStages.analysisEnd);
+		
+						const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
+						context.subscriptions.push(diagnosticCollection);
+						constructDiagnostics(activeDocument, diagnosticCollection);
+					}
+					).catch(err => {
+						debugMessage(DebugTypes.error, err);
+						debugMessage(DebugTypes.error, "Analysis failed");
+						progressEmitter.end(ProgressStages.error);
+					}
+					);
+					break;
+				}	
 		}
 	}
 	);
 
-	debugMessage(DebugTypes.info, "Running initial analysis");
+	progressEmitter.emit('init', ProgressStages.extInit);
 
-	progressEmitter.emit('init', ProgressStages.analysis);
-
-
-	let wait: NodeJS.Timeout;
+	let pause: NodeJS.Timeout;
 
 	vscode.workspace.onDidChangeTextDocument((e) =>{
 
 		if(e.contentChanges.length > 0){
 
-			clearTimeout(wait);
+			clearTimeout(pause);
 
-			wait = setTimeout(() => {
+			pause = setTimeout(() => {
 				debugMessage(DebugTypes.info, "Typing stopped for " + config.delay + "ms");
 				
 				progressEmitter.emit('init', ProgressStages.analysis);
@@ -837,7 +821,6 @@ function constructDiagnostics(doc: vscode.TextDocument | undefined, diagnosticCo
 				return b[1] - a[1];
 			}
 			);
-
 
 			const url = "https://cwe.mitre.org/data/definitions/" + cweID.substring(4) + ".html";
 
