@@ -48,8 +48,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Initial analysis after initialisation, may wrap this in extInitend event
 
 
-	
-	
 	const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
 	context.subscriptions.push(diagnosticCollection);
 
@@ -61,6 +59,8 @@ export async function activate(context: vscode.ExtensionContext) {
 	 */
 
 	progressEmitter.on('init', async (stage:ProgressStages) => {
+
+
 
 		const activeDocument = vscode.window.activeTextEditor?.document ?? undefined;
 
@@ -88,11 +88,14 @@ export async function activate(context: vscode.ExtensionContext) {
 				if(activeDocument){
 					analysis(activeDocument).then(() => {
 
-						debugMessage(DebugTypes.info, "Analysis finished");
+						// debugMessage(DebugTypes.info, "Analysis finished");
 
 						progressEmitter.emit('end', ProgressStages.analysisEnd);
 
+						debugMessage(DebugTypes.info, "Starting diagnostic construction");
+
 						constructDiagnostics(activeDocument, diagnosticCollection);
+
 					}
 					).catch(err => {
 						debugMessage(DebugTypes.error, err);
@@ -123,7 +126,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			pause = setTimeout(() => {
 				debugMessage(DebugTypes.info, "Typing stopped for " + config.delay + "ms");
 				
-				progressEmitter.emit('init', ProgressStages.analysis);
+				progressEmitter.emit('init', ProgressStages.extInit);
 
 			}, config.delay);
 	
@@ -152,6 +155,14 @@ export async function activate(context: vscode.ExtensionContext) {
 			progressEmitter.emit('init', ProgressStages.extInit);
 		}
 	});
+
+
+	context.subscriptions.push(
+		vscode.languages.registerCodeActionsProvider('cpp', new RepairCodeAction(), {
+			providedCodeActionKinds: RepairCodeAction.providedCodeActionKinds
+		})
+	);
+
 	// context.subscriptions.push(disposable);
 }
 
@@ -233,20 +244,26 @@ function interfaceInit(){
 	if(!fs.existsSync(lineModelPath)){
 		debugMessage(DebugTypes.info, "line_model not found, downloading...");
 		downloads.push(downloadEngine(fs.createWriteStream(lineModelPath), DownloadURLs.lineModel));
+	} else {
+		debugMessage(DebugTypes.info, "line_model found at " + lineModelPath + ", skipping download...");
 	}
 	
 	if(!fs.existsSync(sevModelPath)){
 		debugMessage(DebugTypes.info, "sve_model not found, downloading...");
 		downloads.push(downloadEngine(fs.createWriteStream(sevModelPath), DownloadURLs.sevModel));
+	} else {
+		debugMessage(DebugTypes.info, "sev_model found at " + sevModelPath + ", skipping download...");
 	}
 
 	if(!fs.existsSync(cweModelPath)){
 		debugMessage(DebugTypes.info, "cwe_model not found, downloading...");
 		downloads.push(downloadEngine(fs.createWriteStream(cweModelPath), DownloadURLs.cweModel));
+	} else {
+		debugMessage(DebugTypes.info, "cwe_model found at " + cweModelPath + ", skipping download...");
 	}
 
 	await Promise.all(downloads).then(() => {	
-		debugMessage(DebugTypes.info, "All missing models downloaded");	
+		debugMessage(DebugTypes.info, "Completed model initialization");	
 		return Promise.resolve();
 	}
 	).catch(err => {
@@ -890,12 +907,13 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 
 				let diagMessage = "";
 
-				cweDescription = "";
+				cweDescription = predictions.cwe.descriptions[vulCount];
 
 
 				switch(config.informationLevel){
 					case InformationLevels.core: {
-						diagMessage = "Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " | CWE: " + cweID.substring(4) + " " + ((cweName === undefined || "") ? "" : ("(" + cweName + ") ") )  + "| Type: " + cweType;
+						// diagMessage = "Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " | CWE: " + cweID.substring(4) + " " + ((cweName === undefined || "") ? "" : ("(" + cweName + ") ") )  + "| Type: " + cweType;
+						diagMessage = "[Severity: " + sevClass + "] Line " + (vulnLine+1) + " may be vulnerable with " + cweID + " (" + cweType + " | " + cweName + ")";  
 						break;
 					}
 					case InformationLevels.verbose: {
@@ -921,10 +939,28 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 				diagnostic.source = "AIBugHunter";
 				
 				diagnostics.push(diagnostic);
+
+				const diagnosticDescription = new vscode.Diagnostic(
+					new vscode.Range(vulnLine, doc?.lineAt(vulnLine).firstNonWhitespaceCharacterIndex, vulnLine, line.text.length),
+					cweDescription,
+					config.diagnosticSeverity ?? vscode.DiagnosticSeverity.Error
+				);
+
+				diagnosticDescription.code = {
+					value: "More Details",
+					target: vscode.Uri.parse(url)
+				};
+
+				// diagnosticDescription.source = "AIBugHunter";
+
+				diagnostics.push(diagnosticDescription);
+				
 			}
 			vulCount++;
 		}
 	});
+
+	diagnosticCollection.delete(doc.uri);
 
 	diagnosticCollection.set(doc.uri, diagnostics);
 	
@@ -1004,4 +1040,27 @@ async function getCWEData(list:any){
 		debugMessage(DebugTypes.error, "Error while reading CWE XML file: " + err);
 		return Promise.reject(err);
 	}
+}
+
+export class RepairCodeAction implements vscode.CodeActionProvider {
+	provideCodeActions(document: vscode.TextDocument, range: vscode.Range | vscode.Selection, context: vscode.CodeActionContext, token: vscode.CancellationToken): vscode.ProviderResult<(vscode.CodeAction | vscode.Command)[]> {
+		return context.diagnostics.filter(diagnostic => diagnostic.source === "AIBugHunter").map(diagnostic => this.createCommand(diagnostic));
+	}
+	public static readonly providedCodeActionKinds: vscode.CodeActionKind[] = [vscode.CodeActionKind.QuickFix];
+
+	private createCommand(diagnostic: vscode.Diagnostic): vscode.CodeAction{
+		const action = new vscode.CodeAction("Try to fix this vulnerability", vscode.CodeActionKind.QuickFix);
+		action.command = {
+			command: "aibughunter.repairCode",
+			title: "Repair Code",
+			tooltip: "Repair Code"
+		};
+		action.isPreferred = true;
+		// action.disabled = {
+		// 	reason: "Feature not yet implemented"
+		// };
+		action.diagnostics = [diagnostic];
+		return action;
+	}
+
 }
