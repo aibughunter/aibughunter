@@ -51,6 +51,12 @@ export async function activate(context: vscode.ExtensionContext) {
 	const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
 	context.subscriptions.push(diagnosticCollection);
 
+	context.subscriptions.push(
+		vscode.languages.registerCodeActionsProvider('cpp', new RepairCodeAction(), {
+			providedCodeActionKinds: RepairCodeAction.providedCodeActionKinds
+		})
+	);
+	
 	/**
 	 * Any init event will be handled here
 	 * If extInit, then initialise extension (download necessary files, etc)
@@ -90,12 +96,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 						// debugMessage(DebugTypes.info, "Analysis finished");
 
-						progressEmitter.emit('end', ProgressStages.analysisEnd);
+						progressEmitter.emit('end', ProgressStages.predictionEnd);
 
 						debugMessage(DebugTypes.info, "Starting diagnostic construction");
 
 						constructDiagnostics(activeDocument, diagnosticCollection);
-
 					}
 					).catch(err => {
 						debugMessage(DebugTypes.error, err);
@@ -157,11 +162,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	});
 
 
-	context.subscriptions.push(
-		vscode.languages.registerCodeActionsProvider('cpp', new RepairCodeAction(), {
-			providedCodeActionKinds: RepairCodeAction.providedCodeActionKinds
-		})
-	);
+
 
 	// context.subscriptions.push(disposable);
 }
@@ -438,6 +439,9 @@ async function progressHandler(stage: ProgressStages){
 				case ProgressStages.line: progress.report({message:"Detecting vulnerabilities...", increment: 20}); break;
 				case ProgressStages.cwe: progress.report({message: "Identifying CWEs...", increment: 50}); break;
 				case ProgressStages.sev: progress.report({message: "Getting severity scores...", increment: 70}); break;
+				case ProgressStages.predictionEnd: progress.report({message: "Prediction complete", increment: 75}); break;
+				case ProgressStages.descSearch: progress.report({message: "Searching CWE descriptions in XML...", increment: 80}); break;
+				case ProgressStages.diagnostic: progress.report({message: "Constructing diagnostic collection...", increment: 90}); break;
 			}
 		});
 
@@ -445,9 +449,9 @@ async function progressHandler(stage: ProgressStages){
 			progressEmitter.on('end', (stage:ProgressStages) => {
 				switch(stage){
 					case ProgressStages.extInitEnd: progress.report({message: "Initialisation complete", increment: 100}); break;
-					case ProgressStages.analysisEnd: progress.report({message: "Analysis complete", increment: 100}); break;
 					case ProgressStages.error: progress.report({message: "Error occured. Terminating...", increment: 100}); break;
 					case ProgressStages.nodoc: progress.report({message: "No document found. Skipping...", increment: 100}); break;
+					case ProgressStages.analysisEnd: progress.report({message: "Analysis complete", increment: 100}); break;
 				}
 				setTimeout(() => {
 					resolve();
@@ -854,6 +858,9 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 	await getCWEData(cweList);
 
 	vulCount = 0;
+
+	progressEmitter.emit('update', ProgressStages.diagnostic);
+
 	functionSymbols.range.forEach((value: any, i: number) => {
 		if(predictions.line.batch_vul_pred[i] === 1){
 			debugMessage(DebugTypes.info, "Constructing diagnostic for function: " + i);
@@ -960,6 +967,8 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 		}
 	});
 
+	progressEmitter.emit("end", ProgressStages.analysisEnd);
+
 	diagnosticCollection.delete(doc.uri);
 
 	diagnosticCollection.set(doc.uri, diagnostics);
@@ -974,6 +983,8 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
  * @returns Promise that resolves when successfully retrieved CWE data from XML, rejects otherwise
  */
 async function getCWEData(list:any){
+	progressEmitter.emit("update", ProgressStages.descSearch);
+
 	try{
 		const data = await fsa.readFile(config.xmlPath);
 		debugMessage(DebugTypes.info, "CWE XML file read");
@@ -988,6 +999,8 @@ async function getCWEData(list:any){
 
 			  if(!parsed){
 				  debugMessage(DebugTypes.error, "Error parsing CWE XML file");
+				  progressEmitter.emit("end", ProgressStages.error);
+				  return Promise.reject();
 			  } else{
 				
 				debugMessage(DebugTypes.info, "Parsed CWE XML file. Getting data");
@@ -1033,11 +1046,13 @@ async function getCWEData(list:any){
 			} 
 		} catch(err){
 			debugMessage(DebugTypes.error, "Error Parsing CWE XML file");
+			progressEmitter.emit("end", ProgressStages.error);
 			return Promise.reject(err);
 		}
 	
 	} catch(err:any){
 		debugMessage(DebugTypes.error, "Error while reading CWE XML file: " + err);
+		progressEmitter.emit("end", ProgressStages.error);
 		return Promise.reject(err);
 	}
 }

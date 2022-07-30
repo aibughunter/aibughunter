@@ -63,7 +63,9 @@ export enum ProgressStages{
     cwe = "cwe",
     sev = "sev",
     analysisEnd = "analysisEnd",
+    predictionEnd = "predictionEnd",
     diagnostic = "diagnostic",
+    descSearch = "descSearch",
     error = "error",
     nodoc = "nodoc",
 }
