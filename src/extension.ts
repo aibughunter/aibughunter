@@ -5,7 +5,7 @@ import { robertaProcessing } from 'tokenizers/bindings/post-processors';
 import { setFlagsFromString } from 'v8';
 import * as vscode from 'vscode';
 import { MessageChannel } from 'worker_threads';
-import {Config, DebugTypes, DownloadURLs, Functions, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages, remoteInferenceURLs} from './config';
+import {Config, DebugTypes, GlobalURLs, Functions, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages, remoteInferenceURLs} from './config';
 
 const axios = require('axios');
 const fs = require('fs');
@@ -88,13 +88,11 @@ export async function activate(context: vscode.ExtensionContext) {
 				}
 				progressEmitter.emit('end', ProgressStages.extInitEnd);
 				debugMessage(DebugTypes.info, "Running initial analysis");
-				progressEmitter.emit('init', ProgressStages.analysis);
+				progressEmitter.emit('init', ProgressStages.inferenceStart);
 				break;
-			case ProgressStages.analysis:
+			case ProgressStages.inferenceStart:
 				if(activeDocument){
-					analysis(activeDocument).then(() => {
-
-						// debugMessage(DebugTypes.info, "Analysis finished");
+					inferenceEngine(activeDocument).then(() => {
 
 						progressEmitter.emit('end', ProgressStages.predictionEnd);
 
@@ -244,21 +242,21 @@ function interfaceInit(){
 
 	if(!fs.existsSync(lineModelPath)){
 		debugMessage(DebugTypes.info, "line_model not found, downloading...");
-		downloads.push(downloadEngine(fs.createWriteStream(lineModelPath), DownloadURLs.lineModel));
+		downloads.push(downloadEngine(fs.createWriteStream(lineModelPath), GlobalURLs.lineModel));
 	} else {
 		debugMessage(DebugTypes.info, "line_model found at " + lineModelPath + ", skipping download...");
 	}
 	
 	if(!fs.existsSync(sevModelPath)){
 		debugMessage(DebugTypes.info, "sve_model not found, downloading...");
-		downloads.push(downloadEngine(fs.createWriteStream(sevModelPath), DownloadURLs.sevModel));
+		downloads.push(downloadEngine(fs.createWriteStream(sevModelPath), GlobalURLs.sevModel));
 	} else {
 		debugMessage(DebugTypes.info, "sev_model found at " + sevModelPath + ", skipping download...");
 	}
 
 	if(!fs.existsSync(cweModelPath)){
 		debugMessage(DebugTypes.info, "cwe_model not found, downloading...");
-		downloads.push(downloadEngine(fs.createWriteStream(cweModelPath), DownloadURLs.cweModel));
+		downloads.push(downloadEngine(fs.createWriteStream(cweModelPath), GlobalURLs.cweModel));
 	} else {
 		debugMessage(DebugTypes.info, "cwe_model found at " + cweModelPath + ", skipping download...");
 	}
@@ -301,7 +299,7 @@ async function cweListInit() {
 
 	if(!fs.existsSync(cwePath) || files.length === 0){ // If zip file doesn't exist or no xml files found in subdirectory
 		debugMessage(DebugTypes.info, "cwec_latest.xml.zip not found, downloading...");
-		await downloadEngine(fs.createWriteStream(cwePath), DownloadURLs.cweList).then(() => {
+		await downloadEngine(fs.createWriteStream(cwePath), GlobalURLs.cweList).then(() => {
 			debugMessage(DebugTypes.info, "cwec_latest.xml.zip downloaded");
 		}
 		).catch(err => {
@@ -393,13 +391,15 @@ async function init() {
 	// }
 	// );
 
+	var candidates = [cweListInit()];
 
-	// Model and CWE list init not required for OnPremise and Cloud inference
+	if(config.inferenceMode === InferenceModes.local){
+		candidates.push(modelInit());
+	}
 
-	await Promise.all([
-		modelInit(),
-		cweListInit()
-	]).then(() => {
+	console.log(candidates);
+
+	await Promise.all(candidates).then(() => {
 		var end = new Date().getTime();
 		debugMessage(DebugTypes.info, "Initialisation took " + (end - start) + "ms");
 		debugMessage(DebugTypes.info, "Model and CWE list successfully loaded");
@@ -430,7 +430,7 @@ async function progressHandler(stage: ProgressStages){
 
 		switch(stage){
 			case ProgressStages.extInit: progress.report({ message: "Initialisation - Downloading models and CWE List...", increment: 0}); break;
-			case ProgressStages.analysis: progress.report({ message: "Starting analysis...", increment: 0}); break;
+			case ProgressStages.inferenceStart: progress.report({ message: "Starting analysis...", increment: 0}); break;
 		}
 		
 		progressEmitter.on('update', (stage: ProgressStages) =>{
@@ -451,7 +451,7 @@ async function progressHandler(stage: ProgressStages){
 					case ProgressStages.extInitEnd: progress.report({message: "Initialisation complete", increment: 100}); break;
 					case ProgressStages.error: progress.report({message: "Error occured. Terminating...", increment: 100}); break;
 					case ProgressStages.nodoc: progress.report({message: "No document found. Skipping...", increment: 100}); break;
-					case ProgressStages.analysisEnd: progress.report({message: "Analysis complete", increment: 100}); break;
+					case ProgressStages.inferenceEnd: progress.report({message: "Analysis complete", increment: 100}); break;
 				}
 				setTimeout(() => {
 					resolve();
@@ -753,7 +753,7 @@ function removeBlankLines(text:string): [string,number[]]{
  * @returns 
  */
 
-async function analysis(document: vscode.TextDocument){
+async function inferenceEngine(document: vscode.TextDocument){
 
 	if(document.getText() === ""){
 		debugMessage(DebugTypes.error, "Document is empty, aborting analysis");
@@ -822,7 +822,7 @@ async function analysis(document: vscode.TextDocument){
 	);
 
 
-	progressEmitter.emit('end', ProgressStages.analysis);
+	progressEmitter.emit('end', ProgressStages.inferenceStart);
 
 	var end = new Date().getTime();
 
@@ -968,7 +968,7 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 		}
 	});
 
-	progressEmitter.emit("end", ProgressStages.analysisEnd);
+	progressEmitter.emit("end", ProgressStages.inferenceEnd);
 
 	diagnosticCollection.delete(doc.uri);
 
