@@ -61,13 +61,20 @@
             "Verbose",
             "Core",
             "Minimal"
-          ],
-          "enumDescriptions": [
+          ],"enumDescriptions": [
             "Display all information including vulnerability score",
             "Show all information except vulnerability score",
             "Display CWE ID only"
-          ]
-        },
+          ]},
+          "AiBugHunter.diagnostic.displayInformation": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "scope": "window",
+            "description": "Select which information to display in the diagnostics message"
+          },
         "AiBugHunter.diagnostics.showDescription": {
           "order": 4,
           "type": "boolean",

@@ -56,7 +56,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			providedCodeActionKinds: RepairCodeAction.providedCodeActionKinds
 		})
 	);
-	
+
 	/**
 	 * Any init event will be handled here
 	 * If extInit, then initialise extension (download necessary files, etc)
@@ -826,7 +826,7 @@ async function analysis(document: vscode.TextDocument){
 
 	var end = new Date().getTime();
 
-	debugMessage(DebugTypes.info, "Analysis completed in " + (end - start) + "ms");
+	debugMessage(DebugTypes.info, "All inference completed in " + (end - start) + "ms");
 
 	return Promise.resolve();
 }
@@ -947,21 +947,22 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 				
 				diagnostics.push(diagnostic);
 
-				const diagnosticDescription = new vscode.Diagnostic(
-					new vscode.Range(vulnLine, doc?.lineAt(vulnLine).firstNonWhitespaceCharacterIndex, vulnLine, line.text.length),
-					cweDescription,
-					config.diagnosticSeverity ?? vscode.DiagnosticSeverity.Error
-				);
-
-				diagnosticDescription.code = {
-					value: "More Details",
-					target: vscode.Uri.parse(url)
-				};
-
-				// diagnosticDescription.source = "AIBugHunter";
-
-				diagnostics.push(diagnosticDescription);
-				
+				if(config.showDescription){
+					const diagnosticDescription = new vscode.Diagnostic(
+						new vscode.Range(vulnLine, doc?.lineAt(vulnLine).firstNonWhitespaceCharacterIndex, vulnLine, line.text.length),
+						cweDescription,
+						config.diagnosticSeverity ?? vscode.DiagnosticSeverity.Error
+					);
+	
+					diagnosticDescription.code = {
+						value: "More Details",
+						target: vscode.Uri.parse(url)
+					};
+	
+					// diagnosticDescription.source = "AIBugHunter";
+	
+					diagnostics.push(diagnosticDescription);
+				}
 			}
 			vulCount++;
 		}
