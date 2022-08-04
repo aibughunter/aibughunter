@@ -1,6 +1,6 @@
 # aibughunter
 
-Description
+AI Bug Hunter Project
 
 ## Known Issues
 
@@ -11,4 +11,4 @@ Description
 ## Pending Features
 
 - File checking for individual files (Checksum?)
-- 
+- Cloud inference option
