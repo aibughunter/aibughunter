@@ -5,6 +5,7 @@ This is the README for your extension "aibughunter". After writing up a brief de
 ## Known Issues
 
 - Native implementation of model inference not possible as RoBERTa tokeniser is not available on npm/Node JS
+- GPU mode on local inference does not provide any benefits (potentially due to dependencies?)
 
 ## Features
 

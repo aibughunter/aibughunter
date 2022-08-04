@@ -21,6 +21,7 @@ export interface Config {
     sevModelPath?: string;
     cweModelPath?: string;
     resSubDir?: string;
+    localInferenceDir?: string;
 } 
 
 export enum InferenceModes {
@@ -51,7 +52,8 @@ export enum GlobalURLs {
     lineModel = "https://object-store.rc.nectar.org.au/v1/AUTH_bec3bd546fd54995896239e9ff3d4c4f/AIBugHunterModels/models/line_model.onnx",
     sevModel = "https://object-store.rc.nectar.org.au/v1/AUTH_bec3bd546fd54995896239e9ff3d4c4f/AIBugHunterModels/models/sev_model.onnx",
     cweModel = "https://object-store.rc.nectar.org.au/v1/AUTH_bec3bd546fd54995896239e9ff3d4c4f/AIBugHunterModels/models/cwe_model.onnx",
-    cweList = "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip"
+    cweList = "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip",
+    inferenceData = "https://object-store.rc.nectar.org.au/v1/AUTH_bec3bd546fd54995896239e9ff3d4c4f/AIBugHunterModels/local-inference-data.zip"
 }
 
 export enum ProgressStages{

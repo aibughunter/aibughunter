@@ -46,7 +46,6 @@ const progressEmitter = new Progress();
 export async function activate(context: vscode.ExtensionContext) {
 
 	debugMessage(DebugTypes.info, "Extension initialised");
-	vscode.window.showInformationMessage('AIBugHunter: Extension Initialised!');
 	// Initial analysis after initialisation, may wrap this in extInitend event
 
 
@@ -76,6 +75,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			case ProgressStages.extInit:
 				let noerror = false;
 
+				vscode.window.showInformationMessage('AIBugHunter: Downloading necessary files...');
+
 				while(!noerror){
 					await init().then(() => {
 						noerror = true;
@@ -86,6 +87,9 @@ export async function activate(context: vscode.ExtensionContext) {
 					}
 					);
 				}
+
+				vscode.window.showInformationMessage('AIBugHunter: Initialisation complete');
+
 				progressEmitter.emit('end', ProgressStages.extInitEnd);
 				debugMessage(DebugTypes.info, "Running initial analysis");
 				progressEmitter.emit('init', ProgressStages.inferenceStart);
@@ -115,7 +119,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 	);
 
-	console.log(inferenceMode);
 
 	progressEmitter.emit('init', ProgressStages.extInit);
 
@@ -228,6 +231,9 @@ function interfaceInit(){
 	const lineModelPath = config.lineModelPath = path.resolve(modelPath, config.resSubDir,'line_model.onnx');
 	const sevModelPath = config.sevModelPath = path.resolve(modelPath,config.resSubDir ,'sev_model.onnx');
 	const cweModelPath = config.cweModelPath = path.resolve(modelPath,config.resSubDir ,'cwe_model.onnx');
+	
+	const localInferenceData = path.resolve(modelPath, config.resSubDir, 'local-inference-data.zip');
+
 
 	if(config.resSubDir && !fs.existsSync(path.join(modelPath, config.resSubDir))){
 		fs.mkdirSync(path.join(modelPath, config.resSubDir), (err: any) => {
@@ -241,26 +247,38 @@ function interfaceInit(){
 
 	var downloads = [];
 
-	if(!fs.existsSync(lineModelPath)){
-		debugMessage(DebugTypes.info, "line_model not found, downloading...");
-		downloads.push(downloadEngine(fs.createWriteStream(lineModelPath), GlobalURLs.lineModel));
-	} else {
-		debugMessage(DebugTypes.info, "line_model found at " + lineModelPath + ", skipping download...");
-	}
-	
-	if(!fs.existsSync(sevModelPath)){
-		debugMessage(DebugTypes.info, "sve_model not found, downloading...");
-		downloads.push(downloadEngine(fs.createWriteStream(sevModelPath), GlobalURLs.sevModel));
-	} else {
-		debugMessage(DebugTypes.info, "sev_model found at " + sevModelPath + ", skipping download...");
-	}
+	const extractTarget = path.resolve(modelPath, config.resSubDir);
 
-	if(!fs.existsSync(cweModelPath)){
-		debugMessage(DebugTypes.info, "cwe_model not found, downloading...");
-		downloads.push(downloadEngine(fs.createWriteStream(cweModelPath), GlobalURLs.cweModel));
-	} else {
-		debugMessage(DebugTypes.info, "cwe_model found at " + cweModelPath + ", skipping download...");
-	}
+	// if(!fs.existsSync(localInferenceData)){
+	// 	debugMessage(DebugTypes.info, "local-inference-data.zip not found, downloading...");
+	// 	downloads.push(downloadEngine(fs.createWriteStream(localInferenceData), GlobalURLs.inferenceData));
+
+	// } else {
+	// 	debugMessage(DebugTypes.info, "local-inference-data.zip found at " + lineModelPath + ", skipping download...");
+	// }
+
+	downloads.push(localInit());
+
+	// if(!fs.existsSync(lineModelPath)){
+	// 	debugMessage(DebugTypes.info, "line_model not found, downloading...");
+	// 	downloads.push(downloadEngine(fs.createWriteStream(lineModelPath), GlobalURLs.lineModel));
+	// } else {
+	// 	debugMessage(DebugTypes.info, "line_model found at " + lineModelPath + ", skipping download...");
+	// }
+	
+	// if(!fs.existsSync(sevModelPath)){
+	// 	debugMessage(DebugTypes.info, "sve_model not found, downloading...");
+	// 	downloads.push(downloadEngine(fs.createWriteStream(sevModelPath), GlobalURLs.sevModel));
+	// } else {
+	// 	debugMessage(DebugTypes.info, "sev_model found at " + sevModelPath + ", skipping download...");
+	// }
+
+	// if(!fs.existsSync(cweModelPath)){
+	// 	debugMessage(DebugTypes.info, "cwe_model not found, downloading...");
+	// 	downloads.push(downloadEngine(fs.createWriteStream(cweModelPath), GlobalURLs.cweModel));
+	// } else {
+	// 	debugMessage(DebugTypes.info, "cwe_model found at " + cweModelPath + ", skipping download...");
+	// }
 
 	await Promise.all(downloads).then(() => {	
 		debugMessage(DebugTypes.info, "Completed model initialization");	
@@ -271,6 +289,53 @@ function interfaceInit(){
 		return Promise.reject(err);
 	}
 	);
+}
+
+async function localInit(){
+	const zipPath = (config.modelDir === ".")? __dirname + "/" + config.modelDir: config.modelDir;
+	const localInferenceData = path.resolve(zipPath, config.resSubDir, 'local-inference-data.zip');
+
+	const extractTarget = path.resolve(zipPath, config.resSubDir);
+
+	if(config.resSubDir && !fs.existsSync(extractTarget)){
+		fs.mkdirSync(path.join(zipPath, config.resSubDir), (err: any) => {
+			if (err) {
+				return console.error(err);
+			}
+			debugMessage(DebugTypes.info, "Directory created successfully at " + extractTarget);
+		}
+		);
+	}
+
+	if(!fs.existsSync(localInferenceData)){
+		debugMessage(DebugTypes.info, "local-inference-data.zip not found, downloading...");
+		await downloadEngine(fs.createWriteStream(localInferenceData), GlobalURLs.inferenceData).then(async () => {
+			debugMessage(DebugTypes.info, "Completed local inference data download");
+			debugMessage(DebugTypes.info, "Extracting local inference data zip...");
+
+		
+			await extract(localInferenceData, {dir: extractTarget}).then(() => {
+				debugMessage(DebugTypes.info, "local-inference-data.zip extracted at " + extractTarget.toString());
+				return Promise.resolve();
+			}
+			).catch((err: any) => {
+				debugMessage(DebugTypes.error, "Error occured while extracting local-inference-data.zip");
+				return Promise.reject(err);
+			}
+			);
+		}
+		).catch(err => {
+			debugMessage(DebugTypes.error, "Error occured while downloading local inference data");
+			return Promise.reject(err);
+		}
+		);
+	} else {
+		debugMessage(DebugTypes.info, "local-inference-data.zip found at " + localInferenceData + ", skipping download...");
+	}
+
+	config.localInferenceDir = path.resolve(extractTarget, 'local-inference-data');
+
+
 }
 
 /**
@@ -284,6 +349,7 @@ async function cweListInit() {
 	const cwePath  = path.resolve(zipPath, config.resSubDir,'cwec_latest.xml.zip');
 
 	const extractTarget = path.resolve(zipPath, config.resSubDir);
+
 
 	// Create subdirectory if specified and doesn't exist
 	if(config.resSubDir && !fs.existsSync(extractTarget)){
@@ -398,7 +464,6 @@ async function init() {
 		candidates.push(modelInit());
 	}
 
-	console.log(candidates);
 
 	await Promise.all(candidates).then(() => {
 		var end = new Date().getTime();
@@ -471,7 +536,9 @@ export class LocalInference{
 
 		debugMessage(DebugTypes.info, "Starting line inference");
 
-		const shell = new PythonShell('/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py', {mode:'text', args: ["line", (config.gpu ? "True" : "False")]});
+		
+
+		const shell = new PythonShell('deploy.py', {mode:'text', args: ["line", (config.gpu ? "True" : "False")], scriptPath: config.localInferenceDir});
 
 		debugMessage(DebugTypes.info, "Sending data to python script");
 		let start = new Date().getTime();
@@ -480,7 +547,6 @@ export class LocalInference{
 
 		return new Promise((resolve, reject) => {
 			shell.on('message', async (message: any) => {
-				console.log(message);
 				let end = new Date().getTime();
 				debugMessage(DebugTypes.info, "Received response from python script in " + (end - start) + "ms");
 				predictions.line = JSON.parse(message);
@@ -500,7 +566,7 @@ export class LocalInference{
 	public async cwe(list: Array<string>): Promise<any>{
 		debugMessage(DebugTypes.info, "Starting CWE prediction");
 
-		const shell = new PythonShell('/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py', {mode:'text', args: ["cwe", (config.gpu ? "True" : "False")]});
+		const shell = new PythonShell('deploy.py', {mode:'text', args: ["cwe", (config.gpu ? "True" : "False")], scriptPath: config.localInferenceDir});
 
 		debugMessage(DebugTypes.info, "Sending data to python script");
 		let start = new Date().getTime();
@@ -527,12 +593,12 @@ export class LocalInference{
 	public async sev(list: Array<string>): Promise<any>{
 		debugMessage(DebugTypes.info, "Starting severity prediction");
 
-		const shell = new PythonShell('/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py', {mode:'text', args: ["sev", (config.gpu ? "True" : "False")]});
+		const shell = new PythonShell('deploy.py', {mode:'text', args: ["sev", (config.gpu ? "True" : "False")], scriptPath: config.localInferenceDir});
 
 		debugMessage(DebugTypes.info, "Sending data to python script");
 		let start = new Date().getTime();
 		shell.send(JSON.stringify(list));
-		
+
 		return new Promise((resolve, reject) => {
 			shell.on('message', async (message: any) => {
 				let end = new Date().getTime();
