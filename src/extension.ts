@@ -6,6 +6,8 @@ import { setFlagsFromString } from 'v8';
 import * as vscode from 'vscode';
 import { MessageChannel } from 'worker_threads';
 import {Config, DebugTypes, GlobalURLs, Functions, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages, remoteInferenceURLs} from './config';
+import { PythonShell } from 'python-shell';
+import { stdin } from 'process';
 
 const axios = require('axios');
 const fs = require('fs');
@@ -14,6 +16,7 @@ const fsa = require('fs/promises');
 // const formdata = require('form-data');
 const extract = require('extract-zip');
 const parser = require('xml2js');
+
 
 
 let config:Config;
@@ -41,14 +44,13 @@ class Progress extends EventEmitter{
 const progressEmitter = new Progress();
 
 export async function activate(context: vscode.ExtensionContext) {
-	
 
 	debugMessage(DebugTypes.info, "Extension initialised");
 	vscode.window.showInformationMessage('AIBugHunter: Extension Initialised!');
 	// Initial analysis after initialisation, may wrap this in extInitend event
 
 
-	const diagnosticCollection = vscode.languages.createDiagnosticCollection('AiBugHunter');
+	const diagnosticCollection = vscode.languages.createDiagnosticCollection('AIBugHunter');
 	context.subscriptions.push(diagnosticCollection);
 
 	context.subscriptions.push(
@@ -65,8 +67,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	 */
 
 	progressEmitter.on('init', async (stage:ProgressStages) => {
-
-
 
 		const activeDocument = vscode.window.activeTextEditor?.document ?? undefined;
 
@@ -98,7 +98,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 						debugMessage(DebugTypes.info, "Starting diagnostic construction");
 
-						constructDiagnostics(activeDocument, diagnosticCollection);
+						// constructDiagnostics(activeDocument, diagnosticCollection);
 					}
 					).catch(err => {
 						debugMessage(DebugTypes.error, err);
@@ -115,6 +115,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 	);
 
+	console.log(inferenceMode);
 
 	progressEmitter.emit('init', ProgressStages.extInit);
 
@@ -465,7 +466,82 @@ async function progressHandler(stage: ProgressStages){
 
 export class LocalInference{
 	public async line(list: Array<string>): Promise<any>{
-		console.log("Line detection");
+		let options = {
+			mode: "json",
+			args: ["0", list, config.gpu]
+		};
+
+		const shell = new PythonShell('/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py', {mode:'text', args: ["line", "True"]});
+
+		shell.send(JSON.stringify(list));
+
+		shell.on('message', async (message: any) => {
+			console.log(JSON.parse(message));
+		}
+		);
+
+		shell.end((err: any) => {
+			if(err){
+				console.log(err);
+			}
+		}	
+		);
+
+		return new Promise((resolve, reject) => {
+			shell.on('message', async (message: any) => {
+				predictions.line = JSON.parse(message);
+				resolve(JSON.parse(message));
+			}
+			);
+
+			shell.end((err: any) => {
+				if(err){
+					reject(err);
+				}
+			}	
+			);
+		});
+
+		// let options = {
+		// 	mode: "json",
+		// }
+
+		// return new Promise<void>((resolve, reject) => {
+		// 	try{
+				// const shell = new PythonShell('/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py', {mode:'text', args: ["line", "True"]});
+				// shell.send(JSON.stringify(list));
+				// console.log("Test");
+				// shell.on('message', (message: any) => {
+				// 	// console.log(message);
+				// 	console.log(JSON.parse(message));
+				// 	resolve();
+				// }
+				// );
+		// 	}
+		// 	catch(err){
+		// 		reject(err);
+		// 	}
+		// 	});
+			
+
+		// const spawn = require("child_process").spawn;
+		// const pythonProcess = spawn('python',["/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py"]);
+		// pythonProcess.stdout.on('data', (data: any) => {
+		// 	console.log(data.toString());
+		// });
+
+		// const { success, err = '', results } = await new Promise(
+		// 	(resolve, reject) =>
+		// 	{
+		// 		shell.on('message', async (message: any) => {
+		// 			console.log(JSON.parse(message));
+		// 			resolve(JSON.parse(message));
+		// 		}
+		// 		);
+		// 	}
+		// );
+
+
 	}
 
 	public async cwe(list: Array<string>): Promise<any>{

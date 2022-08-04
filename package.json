@@ -61,20 +61,22 @@
             "Verbose",
             "Core",
             "Minimal"
-          ],"enumDescriptions": [
+          ],
+          "enumDescriptions": [
             "Display all information including vulnerability score",
             "Show all information except vulnerability score",
             "Display CWE ID only"
-          ]},
-          "AiBugHunter.diagnostic.displayInformation": {
-            "type": "array",
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "scope": "window",
-            "description": "Select which information to display in the diagnostics message"
+          ]
+        },
+        "AiBugHunter.diagnostic.displayInformation": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
           },
+          "scope": "window",
+          "description": "Select which information to display in the diagnostics message"
+        },
         "AiBugHunter.diagnostics.showDescription": {
           "order": 4,
           "type": "boolean",
@@ -161,6 +163,7 @@
     "extract-zip": "^2.0.1",
     "fs": "^0.0.1-security",
     "path": "^0.12.7",
+    "python-shell": "^3.0.1",
     "tokenizers": "^0.12.0",
     "xml2js": "^0.4.23",
     "xml2json": "^0.12.0"

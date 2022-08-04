@@ -7,3 +7,4 @@ node_modules
 */cwe_model.onnx
 */line_model.onnx
 src/test/files/.vscode
+test.py
