@@ -98,7 +98,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 						debugMessage(DebugTypes.info, "Starting diagnostic construction");
 
-						// constructDiagnostics(activeDocument, diagnosticCollection);
+						constructDiagnostics(activeDocument, diagnosticCollection);
 					}
 					).catch(err => {
 						debugMessage(DebugTypes.error, err);
@@ -464,31 +464,25 @@ async function progressHandler(stage: ProgressStages){
 	});
 }
 
+
+
 export class LocalInference{
 	public async line(list: Array<string>): Promise<any>{
-		let options = {
-			mode: "json",
-			args: ["0", list, config.gpu]
-		};
 
-		const shell = new PythonShell('/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py', {mode:'text', args: ["line", "True"]});
+		debugMessage(DebugTypes.info, "Starting line inference");
 
+		const shell = new PythonShell('/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py', {mode:'text', args: ["line", (config.gpu ? "True" : "False")]});
+
+		debugMessage(DebugTypes.info, "Sending data to python script");
+		let start = new Date().getTime();
 		shell.send(JSON.stringify(list));
 
-		shell.on('message', async (message: any) => {
-			console.log(JSON.parse(message));
-		}
-		);
-
-		shell.end((err: any) => {
-			if(err){
-				console.log(err);
-			}
-		}	
-		);
 
 		return new Promise((resolve, reject) => {
 			shell.on('message', async (message: any) => {
+				console.log(message);
+				let end = new Date().getTime();
+				debugMessage(DebugTypes.info, "Received response from python script in " + (end - start) + "ms");
 				predictions.line = JSON.parse(message);
 				resolve(JSON.parse(message));
 			}
@@ -501,55 +495,60 @@ export class LocalInference{
 			}	
 			);
 		});
-
-		// let options = {
-		// 	mode: "json",
-		// }
-
-		// return new Promise<void>((resolve, reject) => {
-		// 	try{
-				// const shell = new PythonShell('/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py', {mode:'text', args: ["line", "True"]});
-				// shell.send(JSON.stringify(list));
-				// console.log("Test");
-				// shell.on('message', (message: any) => {
-				// 	// console.log(message);
-				// 	console.log(JSON.parse(message));
-				// 	resolve();
-				// }
-				// );
-		// 	}
-		// 	catch(err){
-		// 		reject(err);
-		// 	}
-		// 	});
-			
-
-		// const spawn = require("child_process").spawn;
-		// const pythonProcess = spawn('python',["/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py"]);
-		// pythonProcess.stdout.on('data', (data: any) => {
-		// 	console.log(data.toString());
-		// });
-
-		// const { success, err = '', results } = await new Promise(
-		// 	(resolve, reject) =>
-		// 	{
-		// 		shell.on('message', async (message: any) => {
-		// 			console.log(JSON.parse(message));
-		// 			resolve(JSON.parse(message));
-		// 		}
-		// 		);
-		// 	}
-		// );
-
-
 	}
 
 	public async cwe(list: Array<string>): Promise<any>{
-		console.log("CVE detection");
+		debugMessage(DebugTypes.info, "Starting CWE prediction");
+
+		const shell = new PythonShell('/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py', {mode:'text', args: ["cwe", (config.gpu ? "True" : "False")]});
+
+		debugMessage(DebugTypes.info, "Sending data to python script");
+		let start = new Date().getTime();
+		shell.send(JSON.stringify(list));
+
+		return new Promise((resolve, reject) => {
+			shell.on('message', async (message: any) => {
+				let end = new Date().getTime();
+				debugMessage(DebugTypes.info, "Received response from python script in " + (end - start) + "ms");
+				predictions.cwe = JSON.parse(message);
+				resolve(JSON.parse(message));
+			}
+			);
+
+			shell.end((err: any) => {
+				if(err){
+					reject(err);
+				}
+			}	
+			);
+		});
 	}
 
 	public async sev(list: Array<string>): Promise<any>{
-		console.log("Severity detection");
+		debugMessage(DebugTypes.info, "Starting severity prediction");
+
+		const shell = new PythonShell('/home/wren/Documents/DevProjects/AIBugHunter/local-inference/deploy.py', {mode:'text', args: ["sev", (config.gpu ? "True" : "False")]});
+
+		debugMessage(DebugTypes.info, "Sending data to python script");
+		let start = new Date().getTime();
+		shell.send(JSON.stringify(list));
+		
+		return new Promise((resolve, reject) => {
+			shell.on('message', async (message: any) => {
+				let end = new Date().getTime();
+				debugMessage(DebugTypes.info, "Received response from python script in " + (end - start) + "ms");
+				predictions.sev = JSON.parse(message);
+				resolve(JSON.parse(message));
+			}
+			);
+
+			shell.end((err: any) => {
+				if(err){
+					reject(err);
+				}
+			}	
+			);
+		});
 	}
 }
 
