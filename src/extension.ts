@@ -22,6 +22,8 @@ export let predictions:Predictions;
 export let functionSymbols: Functions;
 export let inferenceMode: LocalInference | RemoteInference;
 
+
+
 export class Progress extends EventEmitter{
 	constructor(){
 		super();
@@ -40,6 +42,10 @@ export class Progress extends EventEmitter{
 }
 
 export const progressEmitter = new Progress();
+let statusBarItem: vscode.StatusBarItem;
+
+let busy = false;
+
 
 export async function activate(context: vscode.ExtensionContext) {
 
@@ -73,45 +79,59 @@ export async function activate(context: vscode.ExtensionContext) {
 			case ProgressStages.extInit:
 				let noerror = false;
 
-				vscode.window.showInformationMessage('AIBugHunter: Downloading necessary files...');
+				if(!busy){
+					vscode.window.showInformationMessage('AIBugHunter: Downloading necessary files...');
+					busy = true;
+					while(!noerror){
+						await init().then(() => {
+							noerror = true;
+						}
+						).catch(err => {
+							debugMessage(DebugTypes.error, err);
+							debugMessage(DebugTypes.info, "Error occured during initialisation. Retrying...");
+						}
+						);
+					}
+					busy = false;
 
-				while(!noerror){
-					await init().then(() => {
-						noerror = true;
-					}
-					).catch(err => {
-						debugMessage(DebugTypes.error, err);
-						debugMessage(DebugTypes.info, "Error occured during initialisation. Retrying...");
-					}
-					);
+					vscode.window.showInformationMessage('AIBugHunter: Initialisation complete');
+					progressEmitter.emit('end', ProgressStages.extInitEnd);
+					debugMessage(DebugTypes.info, "Running initial analysis");
+					progressEmitter.emit('init', ProgressStages.inferenceStart);
+					
+				} else{
+					vscode.window.showInformationMessage('AIBugHunter: Initialisation already in progress');
+					debugMessage(DebugTypes.info, "Initialisation already in progress");
 				}
-
-				vscode.window.showInformationMessage('AIBugHunter: Initialisation complete');
-
-				progressEmitter.emit('end', ProgressStages.extInitEnd);
-				debugMessage(DebugTypes.info, "Running initial analysis");
-				progressEmitter.emit('init', ProgressStages.inferenceStart);
 				break;
 			case ProgressStages.inferenceStart:
-				if(activeDocument){
-					inferenceEngine(activeDocument).then(() => {
+				if(!busy){
+					if(activeDocument){
+						busy = true;
+						inferenceEngine(activeDocument).then(() => {
+	
+							progressEmitter.emit('end', ProgressStages.predictionEnd);
+	
+							debugMessage(DebugTypes.info, "Starting diagnostic construction");
+							
+							busy = false;
 
-						progressEmitter.emit('end', ProgressStages.predictionEnd);
-
-						debugMessage(DebugTypes.info, "Starting diagnostic construction");
-
-						constructDiagnostics(activeDocument, diagnosticCollection);
+							constructDiagnostics(activeDocument, diagnosticCollection);
+						}
+						).catch(err => {
+							debugMessage(DebugTypes.error, err);
+							debugMessage(DebugTypes.error, "Analysis failed");
+							progressEmitter.end(ProgressStages.error);
+						}
+						);
+						break;
+					}else{
+						debugMessage(DebugTypes.error, "No active document");
+						progressEmitter.emit('end', ProgressStages.nodoc);
+						busy = false;
 					}
-					).catch(err => {
-						debugMessage(DebugTypes.error, err);
-						debugMessage(DebugTypes.error, "Analysis failed");
-						progressEmitter.end(ProgressStages.error);
-					}
-					);
-					break;
-				}else{
-					debugMessage(DebugTypes.error, "No active document");
-					progressEmitter.emit('end', ProgressStages.nodoc);
+				} else{
+					debugMessage(DebugTypes.error, "Analysis already in progress");
 				}
 		}
 	}
@@ -161,6 +181,26 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	const restart = 'aibughunter.restart';
+	const restartCommand = vscode.commands.registerCommand(restart, () => {
+		debugMessage(DebugTypes.info, "Restarting extension");
+		progressEmitter.emit('init', ProgressStages.extInit);
+	}
+	);
+
+	context.subscriptions.push(restartCommand);
+
+	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+	statusBarItem.command = restart;
+	statusBarItem.text = 'Restart AIBugHunter';
+	statusBarItem.name = 'AIBugHunter';
+	statusBarItem.tooltip = 'Click to reinitialise AIBugHunter';
+	statusBarItem.show();
+	
+	context.subscriptions.push(statusBarItem);
+
+
+
 	// context.subscriptions.push(disposable);
 }
 
@@ -174,8 +214,6 @@ export function deactivate() {}
 function interfaceInit(){
 
 	const vsconfig = vscode.workspace.getConfiguration('AiBugHunter');
-
-	console.log(vsconfig.diagnostics.displayInformation);
 
 	config = {
 		inferenceMode: vsconfig.inference.inferenceMode,
@@ -782,8 +820,6 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 
 			const sevScore = predictions.sev.batch_sev_score[vulCount];
 			const sevClass = predictions.sev.batch_sev_class[vulCount];
-
-			console.log(predictions.sev);
 
 			const lineScores = predictions.line.batch_line_scores[i];
 			

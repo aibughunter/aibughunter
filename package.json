@@ -44,7 +44,7 @@
         "AiBugHunter.inference.inferenceServerURL": {
           "order": 2,
           "type": "string",
-          "default": "http://localhost:8080",
+          "default": "http://localhost:5000",
           "description": "Root URL of the inference server hosted on the on-premise server"
         },
         "AiBugHunter.inference.EnableGPU": {
