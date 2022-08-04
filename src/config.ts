@@ -5,6 +5,7 @@ export interface Config {
     gpu: boolean;
     onPremiseInferenceURL: string;
     informationLevel: InformationLevels;
+    diagnosticInformation: DiagnosticInformation;
     showDescription: boolean;
     diagnosticSeverity?: DiagnosticSeverity;
     maxLines: number;
@@ -32,8 +33,7 @@ export enum InferenceModes {
 
 export enum InformationLevels {
     verbose = "Verbose",
-    core = "Core",
-    minimal = "Minimal"
+    fluent = "Fluent"
 }
 
 export enum HighlightTypes {
@@ -46,6 +46,16 @@ export enum HighlightTypes {
 export enum DebugTypes {
     error = "Error",
     info = "Info",
+}
+
+export enum DiagnosticInformation{
+    lineNumber = "lineNumber",
+    cweID = "cweID",
+    cweType ="cweType",
+    cweSummary = "cweSummary",
+    severityLevel = "severityLevel",
+    severityScore = "severityScore",
+    confidenceScore = "confidenceScore",
 }
 
 export enum GlobalURLs {
@@ -111,4 +121,27 @@ export const remoteInferenceURLs: RemoteInferenceURLs = {
             gpu: "/api/v1/gpu/sev"
         }
     }
+};
+
+export enum FileCategory{
+    inferenceDataZip = "inferenceDataZip",
+    model = "model",
+    cweZIP = "cweZIP",
+    cweXML = "cweXML",
+    tokenizer = "tokenizer",
+}
+
+export const filePrensence = {
+    lineModel: {
+        file: "models/line_model.onnx",
+        category: FileCategory.model
+    },
+    sevModel: "models/sev_model.onnx",
+    cweModel: "models/cwe_model.onnx",
+    cweList: "cwec_latest.xml.zip",
+    inferenceData: "linevul_tokenizer/local-inference-data.zip",
+    tokenizerMerge: "linevul_tokenizer/merges.txt",
+    tokenizerConfig: "linevul_tokenizer/tokenizer_config.json",
+    vocab: "linevul_tokenizer/vocab.json",
+    labelMap: "label_map.pkl"
 };

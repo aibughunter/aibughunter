@@ -5,26 +5,24 @@ import { robertaProcessing } from 'tokenizers/bindings/post-processors';
 import { setFlagsFromString } from 'v8';
 import * as vscode from 'vscode';
 import { MessageChannel } from 'worker_threads';
-import {Config, DebugTypes, GlobalURLs, Functions, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages, remoteInferenceURLs} from './config';
-import { PythonShell } from 'python-shell';
+import {Config, DebugTypes, GlobalURLs, Functions, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages, remoteInferenceURLs, DiagnosticInformation} from './config';
 import { stdin } from 'process';
+import { LocalInference, RemoteInference } from './inference';
 
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const fsa = require('fs/promises');
+export const axios = require('axios');
+export const fs = require('fs');
+export const path = require('path');
+export const fsa = require('fs/promises');
 // const formdata = require('form-data');
-const extract = require('extract-zip');
-const parser = require('xml2js');
+export const extract = require('extract-zip');
+export const parser = require('xml2js');
 
+export let config:Config;
+export let predictions:Predictions;
+export let functionSymbols: Functions;
+export let inferenceMode: LocalInference | RemoteInference;
 
-
-let config:Config;
-let predictions:Predictions;
-let functionSymbols: Functions;
-let inferenceMode: LocalInference | RemoteInference;
-
-class Progress extends EventEmitter{
+export class Progress extends EventEmitter{
 	constructor(){
 		super();
 	}
@@ -41,7 +39,7 @@ class Progress extends EventEmitter{
 	}
 }
 
-const progressEmitter = new Progress();
+export const progressEmitter = new Progress();
 
 export async function activate(context: vscode.ExtensionContext) {
 
@@ -163,9 +161,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-
-
-
 	// context.subscriptions.push(disposable);
 }
 
@@ -180,6 +175,8 @@ function interfaceInit(){
 
 	const vsconfig = vscode.workspace.getConfiguration('AiBugHunter');
 
+	console.log(vsconfig.diagnostics.displayInformation);
+
 	config = {
 		inferenceMode: vsconfig.inference.inferenceMode,
 		gpu: vsconfig.inference.EnableGPU,
@@ -191,6 +188,7 @@ function interfaceInit(){
 		modelDir: vsconfig.model.downloadLocation,
 		cweDir: vsconfig.cwe.downloadLocation,
 		resSubDir: vsconfig.resources.subDirectory,
+		diagnosticInformation: vsconfig.diagnostics.diagnosticMessageInformation
 	};
 
 	switch(vsconfig.diagnostics.highlightSeverityType){
@@ -440,28 +438,10 @@ async function init() {
 
 	debugMessage(DebugTypes.info, "Config loaded, checking model and CWE list presence");
 
-	// await modelInit().then(() => {
-	// 	debugMessage(DebugTypes.info, "Model successfully loaded");
-	// }
-	// ).catch(err => {
-	// 	debugMessage(DebugTypes.error, err);
-	// 	return Promise.reject(err);
-	// }
-	// );
-
-	// await cweListInit().then(() => {
-	// 	debugMessage(DebugTypes.info, "CWE list successfully loaded");
-	// }
-	// ).catch(err => {
-	// 	debugMessage(DebugTypes.error, err);
-	// 	return Promise.reject(err);
-	// }
-	// );
-
 	var candidates = [cweListInit()];
 
 	if(config.inferenceMode === InferenceModes.local){
-		candidates.push(modelInit());
+		candidates.push(localInit());
 	}
 
 
@@ -531,207 +511,6 @@ async function progressHandler(stage: ProgressStages){
 
 
 
-export class LocalInference{
-	public async line(list: Array<string>): Promise<any>{
-
-		debugMessage(DebugTypes.info, "Starting line inference");
-
-		
-
-		const shell = new PythonShell('deploy.py', {mode:'text', args: ["line", (config.gpu ? "True" : "False")], scriptPath: config.localInferenceDir});
-
-		debugMessage(DebugTypes.info, "Sending data to python script");
-		let start = new Date().getTime();
-		shell.send(JSON.stringify(list));
-
-
-		return new Promise((resolve, reject) => {
-			shell.on('message', async (message: any) => {
-				let end = new Date().getTime();
-				debugMessage(DebugTypes.info, "Received response from python script in " + (end - start) + "ms");
-				predictions.line = JSON.parse(message);
-				resolve(JSON.parse(message));
-			}
-			);
-
-			shell.end((err: any) => {
-				if(err){
-					reject(err);
-				}
-			}	
-			);
-		});
-	}
-
-	public async cwe(list: Array<string>): Promise<any>{
-		debugMessage(DebugTypes.info, "Starting CWE prediction");
-
-		const shell = new PythonShell('deploy.py', {mode:'text', args: ["cwe", (config.gpu ? "True" : "False")], scriptPath: config.localInferenceDir});
-
-		debugMessage(DebugTypes.info, "Sending data to python script");
-		let start = new Date().getTime();
-		shell.send(JSON.stringify(list));
-
-		return new Promise((resolve, reject) => {
-			shell.on('message', async (message: any) => {
-				let end = new Date().getTime();
-				debugMessage(DebugTypes.info, "Received response from python script in " + (end - start) + "ms");
-				predictions.cwe = JSON.parse(message);
-				resolve(JSON.parse(message));
-			}
-			);
-
-			shell.end((err: any) => {
-				if(err){
-					reject(err);
-				}
-			}	
-			);
-		});
-	}
-
-	public async sev(list: Array<string>): Promise<any>{
-		debugMessage(DebugTypes.info, "Starting severity prediction");
-
-		const shell = new PythonShell('deploy.py', {mode:'text', args: ["sev", (config.gpu ? "True" : "False")], scriptPath: config.localInferenceDir});
-
-		debugMessage(DebugTypes.info, "Sending data to python script");
-		let start = new Date().getTime();
-		shell.send(JSON.stringify(list));
-
-		return new Promise((resolve, reject) => {
-			shell.on('message', async (message: any) => {
-				let end = new Date().getTime();
-				debugMessage(DebugTypes.info, "Received response from python script in " + (end - start) + "ms");
-				predictions.sev = JSON.parse(message);
-				resolve(JSON.parse(message));
-			}
-			);
-
-			shell.end((err: any) => {
-				if(err){
-					reject(err);
-				}
-			}	
-			);
-		});
-	}
-}
-
-
-export class RemoteInference{
-
-	/**
-	 * Takes a list of all functions in the document, sends them to the remote inference engine and returns the results
-	 * @param list List of functions to analyse
-	 * @returns Promise that resolves when successfully received results, rejects if error occurs
-	 */
-	public async line(list: Array<string>): Promise<any>{
-
-		let jsonObject = JSON.stringify(list);
-		var signal = new AbortController;
-		signal.abort;
-		var start = new Date().getTime();
-		
-		debugMessage(DebugTypes.info, "Sending line detection request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? remoteInferenceURLs.endpoints.line.gpu : remoteInferenceURLs.endpoints.line.cpu));
-		progressEmitter.emit('update', ProgressStages.line);
-
-		await axios({
-			method: "post",
-			url: ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? "/api/v1/gpu/predict" : "/api/v1/cpu/predict"),
-			data: jsonObject,
-			signal: signal.signal,
-			headers: { "Content-Type":"application/json"},
-		  })
-			.then(async function (response: any) {
-				var end = new Date().getTime();
-				var diffInSeconds = (end - start) / 1000;
-
-				predictions.line = response.data;
-
-				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
-				return Promise.resolve(response.data);
-			})
-			.catch(function (err: any) {
-				debugMessage(DebugTypes.error, err);
-				return Promise.reject(err);
-			});
-	}
-
-
-	/**
-	 * Takes a list of vulnerable functions, sends them to remote inference engine for inference, then stores the list of CWE results in the predictions.cwe object
-	 * @param list List of functions to be analysed
-	 * @returns Promise that resolves when successfully received response from model, rejects if error occurs
-	 */
-	public async cwe(list: Array<string>): Promise<any>{
-		let jsonObject = JSON.stringify(list);
-		var signal = new AbortController;
-		signal.abort;
-		var start = new Date().getTime();
-
-		debugMessage(DebugTypes.info, "Sending CWE detection request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? remoteInferenceURLs.endpoints.cwe.gpu : remoteInferenceURLs.endpoints.cwe.cpu));
-		progressEmitter.emit('update', ProgressStages.cwe);
-		await axios({
-			method: "post",
-			url: ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? "/api/v1/gpu/cwe" : "/api/v1/cpu/cwe"),
-			data: jsonObject,
-			signal: signal.signal,
-			headers: { "Content-Type":"application/json"},
-		})
-			.then(function (response: any) {
-				var end = new Date().getTime();
-				var diffInSeconds = (end - start) / 1000;
-
-				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
-				predictions.cwe = response.data;
-
-				return Promise.resolve(response.data);
-			})
-			.catch(function (response: any) {
-				debugMessage(DebugTypes.error, response);
-				return Promise.reject(response);
-			});
-
-	}
-
-	/**
-	 * Takes a list of vulnerable functions, sends them to remote inference engine, then stores the list of severity results in the predictions.sev object 
-	 * @param list List of functions to be analysed (Only vulnerable functions are analysed)
-	 * @returns Promise that resolves when successfully received response from model, rejects if error occurs
-	 */
-	public async sev(list: Array<string>): Promise<any>{
-
-		let jsonObject = JSON.stringify(list);
-		var signal = new AbortController;
-		signal.abort;
-		var start = new Date().getTime();
-
-		debugMessage(DebugTypes.info, "Sending security score request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? remoteInferenceURLs.endpoints.sev.gpu : remoteInferenceURLs.endpoints.sev.cpu));
-		progressEmitter.emit('update', ProgressStages.sev);
-
-		await axios({
-			method: "post",
-			url: ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? "/api/v1/gpu/sev" : "/api/v1/cpu/sev"),
-			data: jsonObject,
-			signal: signal.signal,
-			headers: { "Content-Type":"application/json"},
-			})
-			.then(function (response: any) {
-				var end = new Date().getTime();
-				var diffInSeconds = (end - start) / 1000;
-
-				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
-				predictions.sev = response.data;
-
-				return Promise.resolve(response.data);
-			})
-			.catch(function (response: any) {
-				debugMessage(DebugTypes.error, response);
-				return Promise.reject(response);
-			});
-	}
-}
 
 /**
  * Extract list of functions from the current editor using DocumentSymbolProvider
@@ -931,24 +710,7 @@ async function inferenceEngine(document: vscode.TextDocument){
 
 	progressEmitter.emit('update', ProgressStages.cwe);
 
-	// await inferenceMode.cwe(functionSymbols.vulnFunctions).then(() => {
-	// 	debugMessage(DebugTypes.info, "CWE type retrieved");
-	// }
-	// ).catch((err: string) => {
-	// 	debugMessage(DebugTypes.error, err);
-	// 	return Promise.reject(err);
-	// }
-	// );
-
 	progressEmitter.emit('update', ProgressStages.sev);
-
-	// await inferenceMode.sev(functionSymbols.vulnFunctions).then(() => {
-	// 	debugMessage(DebugTypes.info, "Severity score retrieved");	}
-	// ).catch((err: string) => {
-	// 	debugMessage(DebugTypes.error, err);
-	// 	return Promise.reject(err);
-	// }
-	// );
 
 	await Promise.all([
 		inferenceMode.cwe(functionSymbols.vulnFunctions),
@@ -961,7 +723,6 @@ async function inferenceEngine(document: vscode.TextDocument){
 		return Promise.reject(err);
 	}
 	);
-
 
 	progressEmitter.emit('end', ProgressStages.inferenceStart);
 
@@ -1022,6 +783,8 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 			const sevScore = predictions.sev.batch_sev_score[vulCount];
 			const sevClass = predictions.sev.batch_sev_class[vulCount];
 
+			console.log(predictions.sev);
+
 			const lineScores = predictions.line.batch_line_scores[i];
 			
 			let lineScoreShiftMapped: number[][] = [];
@@ -1057,19 +820,23 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 
 				cweDescription = predictions.cwe.descriptions[vulCount];
 
+				const separator = " | ";
 
 				switch(config.informationLevel){
-					case InformationLevels.core: {
+					case InformationLevels.fluent: {
 						// diagMessage = "Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " | CWE: " + cweID.substring(4) + " " + ((cweName === undefined || "") ? "" : ("(" + cweName + ") ") )  + "| Type: " + cweType;
 						diagMessage = "[Severity: " + sevClass + "] Line " + (vulnLine+1) + " may be vulnerable with " + cweID + " (" + cweType + " | " + cweName + ")";  
 						break;
 					}
 					case InformationLevels.verbose: {
-						diagMessage = "[" + lineScoreShiftMapped[i][1].toString().match(/^\d+(?:\.\d{0,2})?/) + "] Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " (" + sevClass +")" +" | " + "[" + cweIDProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " +"CWE: " + cweID.substring(4) + " " + ((cweName === undefined || "") ? "" : ("(" + cweName + ") ") )  + "| " + "[" + cweTypeProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " + "Type: " + cweType;
+						// diagMessage = "[" + lineScoreShiftMapped[i][1].toString().match(/^\d+(?:\.\d{0,2})?/) + "] Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " (" + sevClass +")" +" | " + "[" + cweIDProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " +"CWE: " + cweID.substring(4) + " " + ((cweName === undefined || "") ? "" : ("(" + cweName + ") ") )  + "| " + "[" + cweTypeProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " + "Type: " + cweType;
+						diagMessage += (config.diagnosticInformation.includes(DiagnosticInformation.lineNumber))? "Line " + (vulnLine + 1) + separator : "";
+						diagMessage += (config.diagnosticInformation.includes(DiagnosticInformation.cweID))? (config.diagnosticInformation.includes(DiagnosticInformation.confidenceScore)? "[" + cweIDProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " + cweID: cweID) : "" ;
+						diagMessage += ((config.diagnosticInformation.includes(DiagnosticInformation.cweID)) && config.diagnosticInformation.includes(DiagnosticInformation.cweSummary))? " (" + cweName + ")" + separator : "";
+						diagMessage += (config.diagnosticInformation.includes(DiagnosticInformation.cweType))? (config.diagnosticInformation.includes(DiagnosticInformation.confidenceScore)?  "[" + cweTypeProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " + "Abstract: " + cweType + separator: "Abstract: " + cweType + separator) : "";
+						diagMessage += (config.diagnosticInformation.includes(DiagnosticInformation.severityLevel))? (config.diagnosticInformation.includes(DiagnosticInformation.severityScore))? "Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " (" + sevClass + ")":  "Severity: " + sevClass : (config.diagnosticInformation.includes(DiagnosticInformation.severityScore))? "Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/):"";
+						diagMessage = diagMessage.endsWith(separator)? diagMessage.substring(0, diagMessage.length - separator.length) : diagMessage;
 						break;
-					}
-					case InformationLevels.minimal: {
-						diagMessage = "Line " + (vulnLine) + " may be vulnerable with " + cweID + " (Severity: " + sevClass + ")";
 					}
 				};
 

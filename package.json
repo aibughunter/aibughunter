@@ -17,8 +17,9 @@
   "contributes": {
     "commands": [
       {
-        "command": "aibughunter.helloWorld",
-        "title": "Hello World"
+        "command": "aibughunter.restart",
+        "title": "Restart Extension",
+        "category": "AIBugHunter"
       }
     ],
     "configuration": {
@@ -55,27 +56,22 @@
         "AiBugHunter.diagnostics.informationLevel": {
           "order": 3,
           "type": "string",
-          "default": "Core",
-          "description": "Amount of information to be displayed in the diagnostics message",
+          "default": "Verbose",
+          "description": "Type of diagnostics message to be displayed",
           "enum": [
             "Verbose",
-            "Core",
-            "Minimal"
-          ],
-          "enumDescriptions": [
-            "Display all information including vulnerability score",
-            "Show all information except vulnerability score",
-            "Display CWE ID only"
+            "Fluent"
           ]
         },
-        "AiBugHunter.diagnostic.displayInformation": {
+        "AiBugHunter.diagnostics.diagnosticMessageInformation": {
+          "order": 4,
           "type": "array",
-          "default": [],
+          "default": ["lineNumber", "cweID", "cweType", "cweSummary", "severityLevel", "severityScore"],
           "items": {
             "type": "string"
           },
           "scope": "window",
-          "description": "Select which information to display in the diagnostics message"
+          "description": "Enter which information you want it to be displayed in verbose mode.\n\n Available options are: lineNumber, cweID, cweType, cweSummary, severityLevel, severityScore, confidenceScore (not on by default)"
         },
         "AiBugHunter.diagnostics.showDescription": {
           "order": 4,
