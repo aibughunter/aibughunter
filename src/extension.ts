@@ -1,7 +1,6 @@
 import { rejects } from 'assert';
 import { copyFileSync } from 'fs';
 import { EventEmitter } from 'stream';
-import { robertaProcessing } from 'tokenizers/bindings/post-processors';
 import { setFlagsFromString } from 'v8';
 import * as vscode from 'vscode';
 import { MessageChannel } from 'worker_threads';
