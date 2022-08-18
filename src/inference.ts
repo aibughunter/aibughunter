@@ -101,6 +101,7 @@ export class RemoteInference{
 	public async line(list: Array<string>): Promise<any>{
 
 		let jsonObject = JSON.stringify(list);
+
 		var signal = new AbortController;
 		signal.abort;
 		var start = new Date().getTime();
@@ -119,7 +120,7 @@ export class RemoteInference{
 				var end = new Date().getTime();
 				var diffInSeconds = (end - start) / 1000;
 
-				predictions.line = response.data;
+				predictions.line = JSON.parse(response.data);
 
 				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
 				return Promise.resolve(response.data);
@@ -156,7 +157,7 @@ export class RemoteInference{
 				var diffInSeconds = (end - start) / 1000;
 
 				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
-				predictions.cwe = response.data;
+				predictions.cwe = JSON.parse(response.data);
 
 				return Promise.resolve(response.data);
 			})
@@ -194,7 +195,7 @@ export class RemoteInference{
 				var diffInSeconds = (end - start) / 1000;
 
 				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
-				predictions.sev = response.data;
+				predictions.sev = JSON.parse(response.data);
 
 				return Promise.resolve(response.data);
 			})
