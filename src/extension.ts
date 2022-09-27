@@ -972,6 +972,13 @@ async function getCWEData(list:any){
 							weaknessDescription = weakness.Summary[0];
 							break;
 						}
+						default: {
+							weakness = parsed.Weakness_Catalog.Weaknesses[0].Weakness.find((obj:any) =>{
+								return obj.$.ID === element[1].toString();
+							});
+							weaknessDescription = weakness.Description[0];
+							break;
+						}
 					}
 
 					weaknessName = weakness.$.Name;
