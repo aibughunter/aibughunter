@@ -113,7 +113,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	
 							debugMessage(DebugTypes.info, "Starting diagnostic construction");
 							
-							busy = false;
 
 							constructDiagnostics(activeDocument, diagnosticCollection);
 						}
@@ -123,6 +122,7 @@ export async function activate(context: vscode.ExtensionContext) {
 							progressEmitter.end(ProgressStages.error);
 						}
 						);
+						busy = false;
 						break;
 					}else{
 						debugMessage(DebugTypes.error, "No active document");
