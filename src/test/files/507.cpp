@@ -35,3 +35,9 @@ key->magic = KEY_DEBUG_MAGIC_X;
 kmem_cache_free(key_jar, key);
 }
 }
+
+// Vulnerability Detection Working
+// BigVul Row No: 1797
+// BigVul ID (big_vul_while.csv): 3479
+// CppCheck ID: 507
+// CWE-ID: CWE-20 (Top 4, Improper input validation)

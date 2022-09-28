@@ -30,3 +30,9 @@ release_sock(sk);
 
 return err ?: len;
 }
+
+// Working Vulnerability Detection
+// BigVul Row No: 1716
+// BigVul ID (big_vul_while.csv): 3985
+// CppCheck ID: 542
+// CWE-ID: CWE-20 (Top 4, Improper input validation)

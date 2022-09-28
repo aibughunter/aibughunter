@@ -41,3 +41,10 @@ if (r->req.aiocb == NULL) {
 scsi_read_complete(r, -EIO);
 }
 }
+
+
+// Vulnerability Detection Working
+// BigVul Row No: 4850
+// BigVul ID (big_vul_while.csv): 258
+// CppCheck ID: 215
+// CWE-ID: CWE-119 (Top-19, Improper restriction of operations within the bounds of a memory buffer)

@@ -41,3 +41,7 @@ return count;
 }
 
 // Working Vulnerability Detection
+// BigVul Row No: 4385
+// BigVul ID (big_vul_while.csv): 2610
+// CppCheck ID: 233
+// CWE-ID: CWE-476 (Top-11, NULL Pointer Dereference)

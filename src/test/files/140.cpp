@@ -39,3 +39,7 @@ offset);
 }
 
 // Vulnerability Detection Working with correct CWE code
+// BigVul Row No: 3223
+// BigVul ID (big_vul_while.csv): 509
+// CppCheck ID: 140
+// CWE-ID: CWE-125 (Top-5, Out-of-bounds read)

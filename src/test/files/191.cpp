@@ -38,4 +38,8 @@ array[i - 1].opcode = FOP_EXIT;
 return (i);
 }
 
-// Vulnerability Detection Working with correct CWE code
+// Vulnerability Detection Working
+// BigVul Row No: 3418
+// BigVul ID (big_vul_while.csv): 2137
+// CppCheck ID: 191
+// CWE-ID: CWE-125 (Top-5, Out-of-bounds read)

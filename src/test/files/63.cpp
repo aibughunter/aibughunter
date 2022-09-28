@@ -34,4 +34,8 @@ ND_PRINT((ndo, "[|frag]"));
 return -1;
 }
 
-// Vulnerability Detection Working with correct CWE code
+// Vulnerability Detection Working
+// BigVul Row No: 2953
+// BigVul ID (big_vul_while.csv): 635
+// CppCheck ID: 63
+// CWE-ID: CWE-125 (Top-5, Out-of-bounds read)

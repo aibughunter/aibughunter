@@ -43,3 +43,10 @@ REPEAT4(stride, cp[stride] = (unsigned char)((cp[stride] - cp[0])&0xff); cp--)
 }
 }
 }
+
+
+// Vulnerability Detection Working
+// BigVul Row No: 2073
+// BigVul ID (big_vul_while.csv): 853
+// CppCheck ID: 415
+// CWE-ID: CWE-20 (Top 4, Improper input validation)

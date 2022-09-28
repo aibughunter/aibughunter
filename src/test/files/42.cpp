@@ -59,4 +59,8 @@ fails:
 	if(b) free(b);
 }/* sycc422_to_rgb() */
 
-// Wrong Vulnerability Detection
+// Wrong Vulnerability Detection (Target: 125, Actual: 119)
+// BigVul Row No: 3891
+// BigVul ID (big_vul_while.csv): 323
+// CppCheck ID: 42
+// CWE-ID: CWE-125 (Top-5, Out-of-bounds read)

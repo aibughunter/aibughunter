@@ -22,4 +22,8 @@ break;
 
 /* {{{ Function/Class/Method definitions */
 
-// Wrong Vulnerability Detection
+// [Error] Wrong Vulnerability Detection
+// BigVul Row No: 3864
+// BigVul ID (big_vul_while.csv): 2131
+// CppCheck ID: 30
+// CWE-ID: CWE-19 (Top 19, Improper restriction of operations within the bounds of a memory buffer)

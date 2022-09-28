@@ -36,4 +36,10 @@ error:
 return ret;
 }
 
-// Wrong Vulnerability Detection
+// [Error] It is not showing the CWE code in top 10
+// There exists two vulnerability in this code
+
+// BigVul Row No: 2815
+// BigVul ID (big_vul_while.csv): 774
+// CppCheck ID: 26
+// CWE-ID: CWE-20 (Top 4, Improper input validation)

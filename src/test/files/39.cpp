@@ -93,4 +93,8 @@ po->rollover = NULL;
 return err;
 }
 
-// Correct Vulnerability Detection but error parsing XML
+// Correct Vulnerability Detection
+// BigVul Row No: 3427
+// BigVul ID (big_vul_while.csv): 3536
+// CppCheck ID: 39
+// CWE-ID: CWE-416

@@ -14,3 +14,10 @@ assert(skb->queue_mapping < ndev->ae_handle->q_num);
 	}
 	return (netdev_tx_t)ret;
 }
+
+
+// Working vulnerability detection
+// BigVul Row No: 4383
+// BigVul ID (big_vul_while.csv): 540
+// CppCheck ID: 393
+// CWE-ID: CWE-416

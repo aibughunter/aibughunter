@@ -101,3 +101,10 @@ return -EFAULT;
 }
 return ret;
 }
+
+
+// Vulnerability detection working
+// BigVul Row No: 2085
+// BigVul ID (big_vul_while.csv): 2807
+// CppCheck ID: 523
+// CWE-ID: CWE-416

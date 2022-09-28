@@ -34,3 +34,9 @@ return NULL;
 
 return (php_http_url_t *) state;
 }
+
+// Correct Vulnerability Detection
+// BigVul Row No: 3886
+// BigVul ID (big_vul_while.csv): 780
+// CppCheck ID: 175
+// CWE-ID: CWE-119 (Top-19, Improper restriction of operations within the bounds of a memory buffer)

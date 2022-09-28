@@ -65,3 +65,10 @@ jid_free(to);
 
 nad_free(nad);
 }
+
+
+// Correct vulnerability detection
+// BigVul Row No: 916
+// BigVul ID (big_vul_while.csv): 3051
+// CppCheck ID: 187
+// CWE-ID: CWE-20 (Top 4, Improper input validation)

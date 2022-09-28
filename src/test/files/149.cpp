@@ -72,3 +72,10 @@ free(parent_pair);
 }
 comps_hslist_destroy(&tmplist);
 }
+
+
+// Correct Vulnerability Detection
+// BigVul Row No: 4692
+// BigVul ID (big_vul_while.csv): 3782
+// CppCheck ID: 149
+// CWE-ID: CWE-416

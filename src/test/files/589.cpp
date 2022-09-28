@@ -27,3 +27,7 @@ return 0;
 }
 
 // Working Vulnerability Detection
+// BigVul Row No: 4137
+// BigVul ID (big_vul_while.csv): 2894
+// CppCheck ID: 589
+// CWE-ID: CWE-22 (Top 8, Improper limitation of a pathname to a restricted directory (Path traversal))

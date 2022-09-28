@@ -45,3 +45,9 @@ return TEE_ERROR_ACCESS_DENIED;
 
 return TEE_SUCCESS;
 }
+
+// Vulnerability Detection Working
+// BigVul Row No: 4446
+// BigVul ID (big_vul_while.csv): 2815
+// CppCheck ID: 413
+// CWE-ID: CWE-20 (Top 4, Improper input validation)

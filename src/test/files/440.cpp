@@ -27,4 +27,8 @@ datagrams = -EFAULT;
 return datagrams;
 }
 
-// Correct CWE code (20) but XML parsing fails
+// Vulnerability detection working
+// BigVul Row No: 1699
+// BigVul ID (big_vul_while.csv): 644
+// CppCheck ID: 440
+// CWE-ID: CWE-20 (Top 4, Improper input validation)

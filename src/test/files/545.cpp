@@ -32,3 +32,9 @@ return;
 
 WARN_ON(1);
 }
+
+// Vulnerability detection working
+// BigVul Row No: 1716
+// BigVul ID (big_vul_while.csv): 3985
+// CppCheck ID: 545
+// CWE-ID: CWE-20 (Top 4, Improper input validation)

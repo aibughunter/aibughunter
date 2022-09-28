@@ -43,4 +43,8 @@ vcpu->arch.complete_userspace_io = complete_emulated_mmio;
 return 0;
 }
 
-// Correct CWE code (119) but XML parsing fails 
+// Correct CWE code (119)
+// BigVul Row No: 1698
+// BigVul ID (big_vul_while.csv): 2929
+// CppCheck ID: 111
+// CWE-ID: CWE-119 (Top-19, Improper restriction of operations within the bounds of a memory buffer)
