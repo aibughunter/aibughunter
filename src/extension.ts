@@ -749,17 +749,24 @@ async function inferenceEngine(document: vscode.TextDocument){
 
 	progressEmitter.emit('update', ProgressStages.sev);
 
-	await Promise.all([
-		inferenceMode.cwe(functionSymbols.vulnFunctions),
-		inferenceMode.sev(functionSymbols.vulnFunctions)
-	]).then(() => {
-		debugMessage(DebugTypes.info, "CWE type and severity score retrieved");
+	console.log(predictions.line);
+
+	if (functionSymbols.vulnFunctions.length === 0){
+		debugMessage(DebugTypes.info, "No vulnerabilities found");
+	}else{
+
+		await Promise.all([
+			inferenceMode.cwe(functionSymbols.vulnFunctions),
+			inferenceMode.sev(functionSymbols.vulnFunctions)
+		]).then(() => {
+			debugMessage(DebugTypes.info, "CWE type and severity score retrieved");
+		}
+		).catch((err: string) => {
+			debugMessage(DebugTypes.error, err);
+			return Promise.reject(err);
+		}
+		);
 	}
-	).catch((err: string) => {
-		debugMessage(DebugTypes.error, err);
-		return Promise.reject(err);
-	}
-	);
 
 	progressEmitter.emit('end', ProgressStages.inferenceStart);
 
