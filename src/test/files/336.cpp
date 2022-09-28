@@ -29,7 +29,7 @@ if (len != 6) {
 ND_PRINT((ndo, " (length bogus, should be = 6)"));
 return len;
 }
-		ND_TCHECK2(*(p + 2), 4);
+ND_TCHECK2(*(p + 2), 4);
 ND_PRINT((ndo, ": Magic-Num 0x%08x", EXTRACT_32BITS(p + 2)));
 break;
 default:
@@ -51,7 +51,8 @@ ND_PRINT((ndo, "[|bacp]"));
 return 0;
 }
 
-// Vulnerability Detection Working with correct CWE code
+// CWE-ID Detection: Working
+// Line Detection: Not working (Should be line 32)
 // BigVul Row No: 2960
 // BigVul ID (big_vul_while.csv): 2329
 // CppCheck ID: 336

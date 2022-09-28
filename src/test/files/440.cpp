@@ -27,7 +27,9 @@ datagrams = -EFAULT;
 return datagrams;
 }
 
-// Vulnerability detection working
+// CWE-ID Detection: Working
+// Line Detection: Not working (Should be line 23, repair too complex)
+
 // BigVul Row No: 1699
 // BigVul ID (big_vul_while.csv): 644
 // CppCheck ID: 440

@@ -74,7 +74,9 @@ comps_hslist_destroy(&tmplist);
 }
 
 
-// Correct Vulnerability Detection
+// CWE-ID Detection: Working
+// Line Detection: Not working (Should be line 7, repair too complex)
+
 // BigVul Row No: 4692
 // BigVul ID (big_vul_while.csv): 3782
 // CppCheck ID: 149

@@ -46,7 +46,9 @@ return TEE_ERROR_ACCESS_DENIED;
 return TEE_SUCCESS;
 }
 
-// Vulnerability Detection Working
+// CWE-ID Detection: Working
+// Line Detection: Not working (Should be line 8, repair too complex)
+
 // BigVul Row No: 4446
 // BigVul ID (big_vul_while.csv): 2815
 // CppCheck ID: 413

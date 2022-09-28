@@ -67,7 +67,9 @@ nad_free(nad);
 }
 
 
-// Correct vulnerability detection
+// CWE-ID Detection: Working
+// Line Detection: Almost Working (Should be line 26)
+
 // BigVul Row No: 916
 // BigVul ID (big_vul_while.csv): 3051
 // CppCheck ID: 187

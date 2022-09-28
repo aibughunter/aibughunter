@@ -23,10 +23,12 @@ return 0;
 /* message not found in context -> remove it from cache
 * return the result of bcache, so we stop upon its first error
 */
-  return mutt_bcache_del(bcache, id);
+return mutt_bcache_del(bcache, id);
 }
 
-// Working Vulnerability Detection
+// CWE-ID Detection: Working
+// Line Detection: Not working (Should be line 26)
+
 // BigVul Row No: 4137
 // BigVul ID (big_vul_while.csv): 2894
 // CppCheck ID: 589

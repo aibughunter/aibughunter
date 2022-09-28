@@ -40,7 +40,9 @@ memcpy(&node->nd_ipv4_address, &ipv4_addr, sizeof(ipv4_addr));
 return count;
 }
 
-// Working Vulnerability Detection
+// CWE-ID Detection: Working
+// Line Detection: Not Working (Should be line 6, repair too complex)
+
 // BigVul Row No: 4385
 // BigVul ID (big_vul_while.csv): 2610
 // CppCheck ID: 233

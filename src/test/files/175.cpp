@@ -1,6 +1,6 @@
 php_http_url_t *php_http_url_parse(const char *str, size_t len, unsigned flags TSRMLS_DC)
 {
-	size_t maxlen = 3 * len;
+size_t maxlen = 3 * len;
 struct parse_state *state = ecalloc(1, sizeof(*state) + maxlen);
 
 state->end = str + len;
@@ -35,7 +35,9 @@ return NULL;
 return (php_http_url_t *) state;
 }
 
-// Correct Vulnerability Detection
+// CWE-ID Detection: Working
+// Line Detection: Not Working (Should be line 3)
+
 // BigVul Row No: 3886
 // BigVul ID (big_vul_while.csv): 780
 // CppCheck ID: 175

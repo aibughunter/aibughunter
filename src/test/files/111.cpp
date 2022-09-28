@@ -43,7 +43,9 @@ vcpu->arch.complete_userspace_io = complete_emulated_mmio;
 return 0;
 }
 
-// Correct CWE code (119)
+// CWE Detection: Working
+// Line Detection: Working (Replace == vcpu with >= vcpu)
+
 // BigVul Row No: 1698
 // BigVul ID (big_vul_while.csv): 2929
 // CppCheck ID: 111

@@ -38,7 +38,9 @@ offset);
 	return offset;
 }
 
-// Vulnerability Detection Working with correct CWE code
+// CWE Detection: Working
+// Line Detection: Not Working (Should be multiple lines, repair too complex)
+
 // BigVul Row No: 3223
 // BigVul ID (big_vul_while.csv): 509
 // CppCheck ID: 140

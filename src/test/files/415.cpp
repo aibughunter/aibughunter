@@ -4,7 +4,7 @@ TIFFPredictorState* sp = PredictorState(tif);
 tmsize_t stride = sp->stride;
 unsigned char* cp = (unsigned char*) cp0;
 
-	assert((cc%stride)==0);
+assert((cc%stride)==0);
 
 if (cc > stride) {
 cc -= stride;

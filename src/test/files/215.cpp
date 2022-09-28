@@ -43,7 +43,9 @@ scsi_read_complete(r, -EIO);
 }
 
 
-// Vulnerability Detection Working
+// CWE Detection: Working
+// Line Detection: Not Working (Should be line 29)
+
 // BigVul Row No: 4850
 // BigVul ID (big_vul_while.csv): 258
 // CppCheck ID: 215

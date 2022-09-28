@@ -1,3 +1,4 @@
+
 static noinline void key_gc_unused_keys(struct list_head *keys)
 {
 while (!list_empty(keys)) {
@@ -36,7 +37,9 @@ kmem_cache_free(key_jar, key);
 }
 }
 
-// Vulnerability Detection Working
+// CWE-ID Detection: Working
+// Line Detection: Not working (Should be line 25)
+
 // BigVul Row No: 1797
 // BigVul ID (big_vul_while.csv): 3479
 // CppCheck ID: 507

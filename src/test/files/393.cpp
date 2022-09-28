@@ -16,7 +16,9 @@ assert(skb->queue_mapping < ndev->ae_handle->q_num);
 }
 
 
-// Working vulnerability detection
+// CWE-ID Detection: Working
+// Line Detection: Not working (Should be line 7, repair too complex)
+
 // BigVul Row No: 4383
 // BigVul ID (big_vul_while.csv): 540
 // CppCheck ID: 393

@@ -4,7 +4,7 @@ int i = 1;
 struct filter_op *array = NULL;
 struct unfold_elm *ue;
 
-   BUG_IF(tree_root == NULL);
+BUG_IF(tree_root == NULL);
 
 fprintf(stdout, " Unfolding the meta-tree ");
 fflush(stdout);
@@ -38,7 +38,9 @@ array[i - 1].opcode = FOP_EXIT;
 return (i);
 }
 
-// Vulnerability Detection Working
+// CWE-ID Detection: Working
+// Line Detection: Not working (Should be line 7)
+
 // BigVul Row No: 3418
 // BigVul ID (big_vul_while.csv): 2137
 // CppCheck ID: 191
