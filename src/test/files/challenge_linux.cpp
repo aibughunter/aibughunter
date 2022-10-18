@@ -1,4 +1,8 @@
-/*
+/* 
+ * Kernel-based Virtual Machine driver for Linux
+ * 
+ * In arch/x86/kvm/x86.c
+ * 
  * Implements the following, as a state machine:
  *
  * read:
@@ -64,11 +68,3 @@ static int complete_emulated_mmio(struct kvm_vcpu *vcpu)
 	vcpu->arch.complete_userspace_io = complete_emulated_mmio;
 	return 0;
 }
-
-// CWE Detection: Working
-// Line Detection: Working (Replace == vcpu with >= vcpu)
-
-// BigVul Row No: 1698
-// BigVul ID (big_vul_while.csv): 2929
-// CppCheck ID: 111
-// CWE-ID: CWE-119 (Top-19, Improper restriction of operations within the bounds of a memory buffer)

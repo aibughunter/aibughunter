@@ -100,11 +100,7 @@ export class RemoteInference{
 	 */
 	public async line(list: Array<string>): Promise<any>{
 
-		console.log(list);
-
 		let jsonObject = JSON.stringify(list);
-
-		console.log(jsonObject);
 
 		var signal = new AbortController;
 		signal.abort;

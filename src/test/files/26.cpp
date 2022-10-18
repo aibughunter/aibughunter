@@ -39,7 +39,15 @@ return ret;
 // [Error] It is not showing the CWE code in top 10
 // There exists two vulnerability in this code
 
-// BigVul Row No: 2815
+// Orig:
+// zap = key->payload.data[0]
+// To:
+// if (!test_bit(KEY_FLAG_NEGATIVE, &key->flags))
+// 	zap = key->payload.data[0];
+// else
+// 	zap = NULL;
+
+// BigVul Row No: 2677
 // BigVul ID (big_vul_while.csv): 774
 // CppCheck ID: 26
 // CWE-ID: CWE-20 (Top 4, Improper input validation)

@@ -37,6 +37,12 @@ return -1;
 // CWE Detection: Working
 // Line Detection: Not Working (Should be line 9)
 
+// Orig:
+// ND_TCHECK(dp->ip6f_offlg);
+// To:
+// ND_TCHECK(*dp);
+
+
 // BigVul Row No: 2953
 // BigVul ID (big_vul_while.csv): 635
 // CppCheck ID: 63

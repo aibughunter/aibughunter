@@ -4,7 +4,7 @@ import { EventEmitter } from 'stream';
 import { setFlagsFromString } from 'v8';
 import * as vscode from 'vscode';
 import { MessageChannel } from 'worker_threads';
-import {Config, DebugTypes, GlobalURLs, Functions, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages, remoteInferenceURLs, DiagnosticInformation} from './config';
+import {Config, DebugTypes, GlobalURLs, Functions, HighlightTypes, InferenceModes, InformationLevels, Predictions, ProgressStages, remoteInferenceURLs, DiagnosticInformation, filePrensence} from './config';
 import { stdin } from 'process';
 import { LocalInference, RemoteInference } from './inference';
 
@@ -45,7 +45,6 @@ let statusBarItem: vscode.StatusBarItem;
 
 let busy = false;
 
-
 export async function activate(context: vscode.ExtensionContext) {
 
 	debugMessage(DebugTypes.info, "Extension initialised");
@@ -79,7 +78,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				let noerror = false;
 
 				if(!busy){
-					vscode.window.showInformationMessage('AIBugHunter: Downloading necessary files...');
+					// vscode.window.showInformationMessage('AIBugHunter: Downloading necessary files...');
 					busy = true;
 					while(!noerror){
 						await init().then(() => {
@@ -93,7 +92,7 @@ export async function activate(context: vscode.ExtensionContext) {
 					}
 					busy = false;
 
-					vscode.window.showInformationMessage('AIBugHunter: Initialisation complete');
+					// vscode.window.showInformationMessage('AIBugHunter: Initialisation complete');
 					progressEmitter.emit('end', ProgressStages.extInitEnd);
 					debugMessage(DebugTypes.info, "Running initial analysis");
 					progressEmitter.emit('init', ProgressStages.inferenceStart);
@@ -107,6 +106,8 @@ export async function activate(context: vscode.ExtensionContext) {
 				if(!busy){
 					if(activeDocument){
 						busy = true;
+					
+						
 						inferenceEngine(activeDocument).then(() => {
 	
 							progressEmitter.emit('end', ProgressStages.predictionEnd);
@@ -197,6 +198,10 @@ export async function activate(context: vscode.ExtensionContext) {
 	statusBarItem.show();
 	
 	context.subscriptions.push(statusBarItem);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('aibughunter.repairCode', () => { })
+	);
 
 
 
@@ -613,7 +618,8 @@ async function extractFunctions(document:vscode.TextDocument){
 			// Formatting functions before storing
 			var block: string = "";
 			for(var i = element.range.start.line; i <= element.range.end.line; i++){
-				block += lines[i];
+				// Remove whitespace at the start of the line
+				block += lines[i].replace(/^\s+/g, "");
 				if(i !== element.range.end.line){
 					block += "\n";
 				}
@@ -749,8 +755,6 @@ async function inferenceEngine(document: vscode.TextDocument){
 
 	progressEmitter.emit('update', ProgressStages.sev);
 
-	console.log(predictions.line);
-
 	if (functionSymbols.vulnFunctions.length === 0){
 		debugMessage(DebugTypes.info, "No vulnerabilities found");
 	}else{
@@ -867,7 +871,7 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 				switch(config.informationLevel){
 					case InformationLevels.fluent: {
 						// diagMessage = "Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " | CWE: " + cweID.substring(4) + " " + ((cweName === undefined || "") ? "" : ("(" + cweName + ") ") )  + "| Type: " + cweType;
-						diagMessage = "[Severity: " + sevClass + "] Line " + (vulnLine+1) + " may be vulnerable with " + cweID + " (" + cweType + " | " + cweName + ")";  
+						diagMessage = "[Severity: " + sevClass + " (" + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + ")" + "] Line " + (vulnLine+1) + " may be vulnerable with " + cweID + " (" + cweType + " | " + cweName + ")";  
 						break;
 					}
 					case InformationLevels.verbose: {
@@ -894,7 +898,7 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 				};
 
 				diagnostic.source = "AIBugHunter";
-				
+
 				diagnostics.push(diagnostic);
 
 				if(config.showDescription){
@@ -904,13 +908,13 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 						config.diagnosticSeverity ?? vscode.DiagnosticSeverity.Error
 					);
 	
-					diagnosticDescription.code = {
-						value: "More Details",
-						target: vscode.Uri.parse(url)
-					};
+					// diagnosticDescription.code = {
+					// 	value: "More Details",
+					// 	target: vscode.Uri.parse(url)
+					// };
 	
-					// diagnosticDescription.source = "AIBugHunter";
-	
+					diagnosticDescription.source = "AIBugHunter";
+
 					diagnostics.push(diagnosticDescription);
 				}
 			}
@@ -1015,24 +1019,31 @@ async function getCWEData(list:any){
 	}
 }
 
+
+
+
 export class RepairCodeAction implements vscode.CodeActionProvider {
 	provideCodeActions(document: vscode.TextDocument, range: vscode.Range | vscode.Selection, context: vscode.CodeActionContext, token: vscode.CancellationToken): vscode.ProviderResult<(vscode.CodeAction | vscode.Command)[]> {
-		return context.diagnostics.filter(diagnostic => diagnostic.source === "AIBugHunter").map(diagnostic => this.createCommand(diagnostic));
+
+		return context.diagnostics.filter(diagnostic => diagnostic.source === "AIBugHunter" && diagnostic.code).map(diagnostic => this.createCommand(diagnostic, document));
 	}
 	public static readonly providedCodeActionKinds: vscode.CodeActionKind[] = [vscode.CodeActionKind.QuickFix];
 
-	private createCommand(diagnostic: vscode.Diagnostic): vscode.CodeAction{
+	private createCommand(diagnostic: vscode.Diagnostic, document: vscode.TextDocument): vscode.CodeAction{
 		const action = new vscode.CodeAction("Try to fix this vulnerability", vscode.CodeActionKind.QuickFix);
 		action.command = {
 			command: "aibughunter.repairCode",
 			title: "Repair Code",
 			tooltip: "Repair Code"
 		};
-		action.isPreferred = true;
-		// action.disabled = {
-		// 	reason: "Feature not yet implemented"
-		// };
+		// action.isPreferred = true;
+		action.disabled = {
+			reason: "Feature not yet implemented"
+		};
+
+	
 		action.diagnostics = [diagnostic];
+		
 		return action;
 	}
 

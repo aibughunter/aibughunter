@@ -41,6 +41,13 @@ return (i);
 // CWE-ID Detection: Working
 // Line Detection: Not working (Should be line 7)
 
+// Orig:
+// BUG_IF(tree_root == NULL);
+// Fix: 
+// // invalid file
+// if (tree_root == NULL)
+//     return 0;
+
 // BigVul Row No: 3418
 // BigVul ID (big_vul_while.csv): 2137
 // CppCheck ID: 191

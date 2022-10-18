@@ -1,3 +1,8 @@
+/**
+ * Function from PDFGen, a C PDF Creation/Generation Library
+ * This function takes the jpeg image and the length of the image, and outputs the width and height of the image
+ * Used in pdffigures to extract figures from PDFs
+ **/
 static int jpeg_size(unsigned char *data, unsigned int data_size,
                      int *width, int *height)
 {
@@ -32,17 +37,3 @@ static int jpeg_size(unsigned char *data, unsigned int data_size,
 
     return -1;
 }
-
-// CWE-ID Detection: Working
-// Line Detection: Not Working (Should be line 23)
-
-// Orig:
-// block_length = data[i] * 256 + data[i+1];
-// To:
-// if (i + 1 < data_size)
-//      block_length = data[i] * 256 + data[i+1];
-
-// BigVul Row No: 4245
-// BigVul ID (big_vul_while.csv): 3914
-// CppCheck ID: 51
-// CWE-ID: CWE-125 (Top-5, Out-of-bounds read)
