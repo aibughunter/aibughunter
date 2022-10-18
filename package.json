@@ -8,11 +8,17 @@
     "vscode": "^1.69.0"
   },
   "categories": [
-    "Other"
+    "Machine Learning",
+    "Testing",
+    "Linters"
   ],
   "activationEvents": [
     "onLanguage:cpp"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aibughunter/aibughunter.git"
+  },
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
