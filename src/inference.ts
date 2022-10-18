@@ -100,7 +100,11 @@ export class RemoteInference{
 	 */
 	public async line(list: Array<string>): Promise<any>{
 
+		console.log(list);
+
 		let jsonObject = JSON.stringify(list);
+
+		console.log(jsonObject);
 
 		var signal = new AbortController;
 		signal.abort;
@@ -123,6 +127,7 @@ export class RemoteInference{
 				predictions.line = JSON.parse(response.data);
 
 				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
+
 				return Promise.resolve(response.data);
 			})
 			.catch(function (err: any) {
@@ -138,7 +143,9 @@ export class RemoteInference{
 	 * @returns Promise that resolves when successfully received response from model, rejects if error occurs
 	 */
 	public async cwe(list: Array<string>): Promise<any>{
+
 		let jsonObject = JSON.stringify(list);
+
 		var signal = new AbortController;
 		signal.abort;
 		var start = new Date().getTime();
