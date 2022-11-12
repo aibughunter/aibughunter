@@ -13,7 +13,7 @@ static sk_sp<SkImage> unPremulSkImageToPremul(SkImage *input)
     return nullptr;
   return newSkImageFromRaster(
       info, std::move(dstPixels),
-      static_cast<size_t>(input->width()) * info.bytesPerPixel());
+      static_cast<unsigned>(input->width()) * info.bytesPerPixel());
 }
 
 // Function 3: Vulnerable with CWE-399
@@ -42,5 +42,3 @@ bool ResourceTracker::UnrefResource(PP_Resource res)
     return false;
   }
 }
-
-<vul_line_lineNo> xxxx <fix_line> xxx <vul_line> xxxxxxxx <fix_line> xxxxxxxx

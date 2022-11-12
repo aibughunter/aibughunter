@@ -1,5 +1,5 @@
 import { DebugTypes, InferenceModes, ProgressStages, remoteInferenceURLs } from "./config";
-import { debugMessage } from "./core";
+import { debugMessage } from "./common";
 import { PythonShell } from 'python-shell';
 import { config, predictions, progressEmitter } from "./extension";
 
@@ -101,6 +101,8 @@ export class RemoteInference{
 	public async line(list: Array<string>): Promise<any>{
 
 		let jsonObject = JSON.stringify(list);
+		
+		console.log(jsonObject);
 
 		var signal = new AbortController;
 		signal.abort;

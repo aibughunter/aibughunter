@@ -4,7 +4,7 @@
   "publisher": "AIBugHunter",
   "description": "AI-driven Software Security Tool That Aims to Help Security Analysts Locate the Vulnerable Source Code Faster",
   "icon": "logo.png",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.69.0"
   },
@@ -73,7 +73,14 @@
         "AiBugHunter.diagnostics.diagnosticMessageInformation": {
           "order": 4,
           "type": "array",
-          "default": ["lineNumber", "cweID", "cweType", "cweSummary", "severityLevel", "severityScore"],
+          "default": [
+            "lineNumber",
+            "cweID",
+            "cweType",
+            "cweSummary",
+            "severityLevel",
+            "severityScore"
+          ],
           "items": {
             "type": "string"
           },
@@ -157,7 +164,7 @@
     "@typescript-eslint/eslint-plugin": "^5.27.0",
     "@typescript-eslint/parser": "^5.27.0",
     "@vscode/test-electron": "^2.1.3",
-    "esbuild": "^0.14.53",
+    "esbuild": "^0.14.54",
     "eslint": "^8.16.0",
     "glob": "^8.0.3",
     "mocha": "^10.0.0",

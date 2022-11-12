@@ -5,7 +5,7 @@
  **/
 static int jpeg_size(unsigned char *data, unsigned int data_size,
                      int *width, int *height)
-{
+    {
     int i = 0;
     if (i + 3 < data_size && data[i] == 0xFF && data[i + 1] == 0xD8 &&
         data[i + 2] == 0xFF && data[i + 3] == 0xE0)

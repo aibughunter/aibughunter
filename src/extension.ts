@@ -22,7 +22,6 @@ export let functionSymbols: Functions;
 export let inferenceMode: LocalInference | RemoteInference;
 
 
-
 export class Progress extends EventEmitter{
 	constructor(){
 		super();
@@ -50,7 +49,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	debugMessage(DebugTypes.info, "Extension initialised");
 	// Initial analysis after initialisation, may wrap this in extInitend event
 
-
 	const diagnosticCollection = vscode.languages.createDiagnosticCollection('AIBugHunter');
 	context.subscriptions.push(diagnosticCollection);
 
@@ -66,7 +64,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	 * If analysis, then start analysis of active document
 	 * @param stage Stage of progress
 	 */
-
 	progressEmitter.on('init', async (stage:ProgressStages) => {
 
 		const activeDocument = vscode.window.activeTextEditor?.document ?? undefined;
@@ -620,6 +617,7 @@ async function extractFunctions(document:vscode.TextDocument){
 			for(var i = element.range.start.line; i <= element.range.end.line; i++){
 				// Remove whitespace at the start of the line
 				block += lines[i].replace(/^\s+/g, "");
+				// block += lines[i];
 				if(i !== element.range.end.line){
 					block += "\n";
 				}
@@ -628,11 +626,13 @@ async function extractFunctions(document:vscode.TextDocument){
 			block = removeComments(block);
 
 			const result = removeBlankLines(block);
+			
+			// Remove all "\n" characters
+			console.log(result[0].replace(/\n/g, ""));
 
 			functionSymbols.functions.push(result[0]);
 			functionSymbols.shift.push(result[1]);
 			functionSymbols.range.push(element.range);
-			
 		}
 	});
 }
@@ -888,6 +888,7 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 
 				const diagnostic = new vscode.Diagnostic(
 					new vscode.Range(vulnLine, doc?.lineAt(vulnLine).firstNonWhitespaceCharacterIndex, vulnLine, line.text.length),
+					// range,
 					diagMessage,
 					config.diagnosticSeverity ?? vscode.DiagnosticSeverity.Error
 				);
@@ -899,22 +900,25 @@ async function constructDiagnostics(doc: vscode.TextDocument | undefined, diagno
 
 				diagnostic.source = "AIBugHunter";
 
+				// Get the text at the range
+				const text = doc?.getText(new vscode.Range(vulnLine, 0, vulnLine, line.text.length));
+				console.log(text);
+				
 				diagnostics.push(diagnostic);
 
 				if(config.showDescription){
 					const diagnosticDescription = new vscode.Diagnostic(
 						new vscode.Range(vulnLine, doc?.lineAt(vulnLine).firstNonWhitespaceCharacterIndex, vulnLine, line.text.length),
+						// range,
 						cweDescription,
 						config.diagnosticSeverity ?? vscode.DiagnosticSeverity.Error
 					);
 	
-					// diagnosticDescription.code = {
-					// 	value: "More Details",
-					// 	target: vscode.Uri.parse(url)
-					// };
+					diagnosticDescription.code = {
+						value: "More Details",
+						target: vscode.Uri.parse(url)
+					};
 	
-					diagnosticDescription.source = "AIBugHunter";
-
 					diagnostics.push(diagnosticDescription);
 				}
 			}
@@ -1037,10 +1041,12 @@ export class RepairCodeAction implements vscode.CodeActionProvider {
 			tooltip: "Repair Code"
 		};
 		// action.isPreferred = true;
+
 		action.disabled = {
-			reason: "Feature not yet implemented"
+			reason: "Repair function is not yet implemented"
 		};
 
+		action.edit = new vscode.WorkspaceEdit();
 	
 		action.diagnostics = [diagnostic];
 		
