@@ -175,6 +175,7 @@
   ],
   "dependencies": {
     "axios": "^0.27.2",
+    "dotenv": "^16.0.3",
     "extract-zip": "^2.0.1",
     "fs": "^0.0.1-security",
     "path": "^0.12.7",
