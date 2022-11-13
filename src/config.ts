@@ -1,4 +1,5 @@
 import {DiagnosticSeverity } from "vscode";
+import * as vscode from 'vscode';
 
 export enum InferenceModes {
     local = "Local",
@@ -62,5 +63,13 @@ export enum ProgressStages{
     analysisEnd,
 
     error,
-    noDocument
+    noDocument,
+    ignore
 }
+
+export type FunctionsListType = {
+	functions: Array<string>,
+	vulnFunctions: Array<string>,
+	shift: Array<Array<number>>,
+	range: Array<vscode.Range>
+};

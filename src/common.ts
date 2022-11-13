@@ -102,6 +102,7 @@ export function debugMessage(type:string, message:string){
 					case ProgressStages.error: progress.report({message: "Error occured. Terminating...", increment: 100}); break;
 					case ProgressStages.noDocument: progress.report({message: "No document found. Skipping...", increment: 100}); break;
 					case ProgressStages.analysisEnd: progress.report({message: "Analysis complete", increment: 100}); break;
+					case ProgressStages.ignore: progress.report({message: "Analysis complete (Ignored)", increment: 100}); break;
 				}
 				setTimeout(() => {
 					resolve();
@@ -111,4 +112,73 @@ export function debugMessage(type:string, message:string){
 
 		return promise;
 	});
+}
+
+/**
+ * Remove comments from the given string
+ * @param text Text to remove comments from
+ * @returns Text without comments
+ */
+ export function removeComments(text:string): string{
+
+	let cleanText = text;
+	let newline = "\n";
+
+	// For Block Comments (/* */)
+	let pattern = /\/\*[^]*?\*\//g; 
+	let matches = text.matchAll(pattern);
+	
+
+	for (const match of matches) {
+
+		var start = match.index ? match.index : 0; // Starting index of the match
+		let length = match.length + match[0].length-1; // Length of the match
+		let end = start + length; // Ending index of the match
+
+		let lineStart = text.substring(0, match.index).split("\n").length;
+		let lineEnd = text.substring(0, end).split("\n").length;
+		let diff = lineEnd - lineStart;
+
+		// console.log("Line: " + lineStart + " To " + lineEnd);
+
+		cleanText = cleanText.replace(match[0], newline.repeat(diff));
+	}
+
+	// For line comments (//)
+	pattern =/\/\/.*/g; 
+	matches = text.matchAll(pattern);
+	for (const match of matches) {
+
+		var start = match.index ? match.index : 0; // Starting index of the match
+		let length = match.length + match[0].length-1; // Length of the match
+		let end = start + length; // Ending index of the match
+
+		let lineStart = text.substring(0, match.index).split("\n").length;
+		let lineEnd = text.substring(0, end).split("\n").length;
+		let diff = lineEnd - lineStart;
+
+		cleanText = cleanText.replace(match[0], newline.repeat(diff));
+	}
+
+	return cleanText;
+}
+
+/**
+ * Remove blank lines from the given string
+ * @param text Text to remove blank lines from
+ * @returns Text without blank lines
+ */
+export function removeBlankLines(text:string): [string,number[]]{
+
+	let lines = text.split("\n");
+	let newLines = [];
+	let shiftMap = [];
+	for (let i = 0; i < lines.length; i++) {
+		if (!lines[i].replace(/^\s+/g, '').length) { // If line is empty, remove and record the line affected
+			shiftMap.push(i);
+		} else {
+			newLines.push(lines[i]);
+		}
+	}
+	return [newLines.join("\n"), shiftMap];
 }
