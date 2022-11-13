@@ -1,0 +1,3 @@
+[submodule "resources/inference-common"]
+	path = resources/inference-common
+	url = https://github.com/aibughunter/inference-common
