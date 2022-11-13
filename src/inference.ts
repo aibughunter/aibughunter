@@ -1,7 +1,7 @@
-import { DebugTypes, InferenceModes, ProgressStages, remoteInferenceURLs } from "./config";
+import { DebugTypes, InferenceModes, ProgressStages } from "./config";
 import { debugMessage } from "./common";
 import { PythonShell } from 'python-shell';
-import { config, predictions, progressEmitter } from "./extension";
+import { config, progressEmitter } from "./extension";
 
 const axios = require('axios');
 
@@ -12,7 +12,7 @@ export class LocalInference{
 
 		debugMessage(DebugTypes.info, "Starting line inference");
 
-		const shell = new PythonShell('deploy.py', {mode:'text', args: ["line", (config.gpu ? "True" : "False")], scriptPath: config.localInferenceDir});
+		const shell = new PythonShell('deploy.py', {mode:'text', args: ["line", (config.useCUDA ? "True" : "False")], scriptPath: config.localInferenceResDir});
 
 		debugMessage(DebugTypes.info, "Sending data to python script");
 		let start = new Date().getTime();
@@ -23,7 +23,7 @@ export class LocalInference{
 			shell.on('message', async (message: any) => {
 				let end = new Date().getTime();
 				debugMessage(DebugTypes.info, "Received response from python script in " + (end - start) + "ms");
-				predictions.line = JSON.parse(message);
+				// predictions.line = JSON.parse(message);
 				resolve(JSON.parse(message));
 			}
 			);
@@ -40,7 +40,7 @@ export class LocalInference{
 	public async cwe(list: Array<string>): Promise<any>{
 		debugMessage(DebugTypes.info, "Starting CWE prediction");
 
-		const shell = new PythonShell('deploy.py', {mode:'text', args: ["cwe", (config.gpu ? "True" : "False")], scriptPath: config.localInferenceDir});
+		const shell = new PythonShell('deploy.py', {mode:'text', args: ["cwe", (config.useCUDA ? "True" : "False")], scriptPath: config.localInferenceResDir});
 
 		debugMessage(DebugTypes.info, "Sending data to python script");
 		let start = new Date().getTime();
@@ -50,7 +50,7 @@ export class LocalInference{
 			shell.on('message', async (message: any) => {
 				let end = new Date().getTime();
 				debugMessage(DebugTypes.info, "Received response from python script in " + (end - start) + "ms");
-				predictions.cwe = JSON.parse(message);
+				// predictions.cwe = JSON.parse(message);
 				resolve(JSON.parse(message));
 			}
 			);
@@ -67,7 +67,7 @@ export class LocalInference{
 	public async sev(list: Array<string>): Promise<any>{
 		debugMessage(DebugTypes.info, "Starting severity prediction");
 
-		const shell = new PythonShell('deploy.py', {mode:'text', args: ["sev", (config.gpu ? "True" : "False")], scriptPath: config.localInferenceDir});
+		const shell = new PythonShell('deploy.py', {mode:'text', args: ["sev", (config.useCUDA ? "True" : "False")], scriptPath: config.localInferenceResDir});
 
 		debugMessage(DebugTypes.info, "Sending data to python script");
 		let start = new Date().getTime();
@@ -77,7 +77,7 @@ export class LocalInference{
 			shell.on('message', async (message: any) => {
 				let end = new Date().getTime();
 				debugMessage(DebugTypes.info, "Received response from python script in " + (end - start) + "ms");
-				predictions.sev = JSON.parse(message);
+				// predictions.sev = JSON.parse(message);
 				resolve(JSON.parse(message));
 			}
 			);
@@ -110,12 +110,12 @@ export class RemoteInference{
 		signal.abort;
 		var start = new Date().getTime();
 		
-		debugMessage(DebugTypes.info, "Sending line detection request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? remoteInferenceURLs.endpoints.line.gpu : remoteInferenceURLs.endpoints.line.cpu));
-		progressEmitter.emit('update', ProgressStages.line);
+		debugMessage(DebugTypes.info, "Sending line detection request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.inferenceURLs.onPremise : config.inferenceURLs.cloud) + ((config.useCUDA)? config.endpoints.line.gpu : config.endpoints.line.cpu));
+		progressEmitter.emit('update', ProgressStages.inferenceLineStart);
 
 		await axios({
 			method: "post",
-			url: ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? "/api/v1/gpu/predict" : "/api/v1/cpu/predict"),
+			url: ((config.inferenceMode === InferenceModes.onpremise)? config.inferenceURLs.onPremise : config.inferenceURLs.cloud) + ((config.useCUDA)? "/api/v1/gpu/predict" : "/api/v1/cpu/predict"),
 			data: jsonObject,
 			signal: signal.signal,
 			headers: { "Content-Type":"application/json"},
@@ -124,7 +124,7 @@ export class RemoteInference{
 				var end = new Date().getTime();
 				var diffInSeconds = (end - start) / 1000;
 
-				predictions.line = JSON.parse(response.data);
+				// predictions.line = JSON.parse(response.data);
 
 				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
 
@@ -150,11 +150,11 @@ export class RemoteInference{
 		signal.abort;
 		var start = new Date().getTime();
 
-		debugMessage(DebugTypes.info, "Sending CWE detection request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? remoteInferenceURLs.endpoints.cwe.gpu : remoteInferenceURLs.endpoints.cwe.cpu));
-		progressEmitter.emit('update', ProgressStages.cwe);
+		debugMessage(DebugTypes.info, "Sending CWE detection request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.inferenceURLs.onPremise : config.inferenceURLs.cloud) + ((config.useCUDA)? config.endpoints.cwe.gpu : config.endpoints.cwe.cpu));
+		progressEmitter.emit('update', ProgressStages.inferenceCweStart);
 		await axios({
 			method: "post",
-			url: ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? "/api/v1/gpu/cwe" : "/api/v1/cpu/cwe"),
+			url: ((config.inferenceMode === InferenceModes.onpremise)? config.inferenceURLs.onPremise : config.inferenceURLs.cloud) + ((config.useCUDA)? "/api/v1/gpu/cwe" : "/api/v1/cpu/cwe"),
 			data: jsonObject,
 			signal: signal.signal,
 			headers: { "Content-Type":"application/json"},
@@ -164,7 +164,7 @@ export class RemoteInference{
 				var diffInSeconds = (end - start) / 1000;
 
 				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
-				predictions.cwe = JSON.parse(response.data);
+				// predictions.cwe = JSON.parse(response.data);
 
 				return Promise.resolve(response.data);
 			})
@@ -187,12 +187,12 @@ export class RemoteInference{
 		signal.abort;
 		var start = new Date().getTime();
 
-		debugMessage(DebugTypes.info, "Sending security score request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? remoteInferenceURLs.endpoints.sev.gpu : remoteInferenceURLs.endpoints.sev.cpu));
-		progressEmitter.emit('update', ProgressStages.sev);
+		debugMessage(DebugTypes.info, "Sending security score request to " + ((config.inferenceMode === InferenceModes.onpremise)? config.inferenceURLs.onPremise : config.inferenceURLs.cloud) + ((config.useCUDA)? config.endpoints.sev.gpu : config.endpoints.sev.cpu));
+		progressEmitter.emit('update', ProgressStages.inferenceSevStart);
 
 		await axios({
 			method: "post",
-			url: ((config.inferenceMode === InferenceModes.onpremise)? config.onPremiseInferenceURL : remoteInferenceURLs.cloudInferenceURL) + ((config.gpu)? "/api/v1/gpu/sev" : "/api/v1/cpu/sev"),
+			url: ((config.inferenceMode === InferenceModes.onpremise)? config.inferenceURLs.onPremise : config.inferenceURLs.cloud) + ((config.useCUDA)? "/api/v1/gpu/sev" : "/api/v1/cpu/sev"),
 			data: jsonObject,
 			signal: signal.signal,
 			headers: { "Content-Type":"application/json"},
@@ -202,7 +202,7 @@ export class RemoteInference{
 				var diffInSeconds = (end - start) / 1000;
 
 				debugMessage(DebugTypes.info, "Received response from model in " + diffInSeconds + " seconds");
-				predictions.sev = JSON.parse(response.data);
+				// predictions.sev = JSON.parse(response.data);
 
 				return Promise.resolve(response.data);
 			})

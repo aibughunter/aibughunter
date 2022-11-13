@@ -54,9 +54,9 @@
           "default": "http://localhost:5000",
           "description": "Root URL of the inference server hosted on the on-premise server"
         },
-        "AiBugHunter.inference.EnableGPU": {
+        "AiBugHunter.inference.useCUDA": {
           "order": 1,
-          "description": "Enable GPU for inference (CPU Fallback)",
+          "description": "Enable CUDA for inference (CUDA supported card required)",
           "type": "boolean",
           "default": false
         },
@@ -122,24 +122,6 @@
           "type": "number",
           "default": 1500,
           "description": "Delay after paused typing before analysis (in milliseconds)"
-        },
-        "AiBugHunter.model.downloadLocation": {
-          "order": 8,
-          "type": "string",
-          "default": ".",
-          "description": "Location to download the model to (default: extension directory)"
-        },
-        "AiBugHunter.cwe.downloadLocation": {
-          "order": 9,
-          "type": "string",
-          "default": ".",
-          "description": "Location to download the CWE List to (default: extension directory)"
-        },
-        "AiBugHunter.resources.subDirectory": {
-          "order": 10,
-          "type": "string",
-          "default": "resources",
-          "description": "Subdirectory to store resources (models, CWE list, etc.). Empty for no subdirectory."
         }
       }
     }
