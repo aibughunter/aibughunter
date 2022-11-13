@@ -7,15 +7,11 @@ import path = require("path");
 
 const axios = require('axios');
 
-// Interface inference and implement for local and remote inference
-
 export interface Inference {
 	line(list: Array<string>): Promise<any>;
 	cwe(list: Array<string>): Promise<any>;
 	sev(list: Array<string>): Promise<any>;
 }
-
-// Implement above as abstract class for local inference and remote inference
 
 export abstract class InferenceEngine implements Inference {
 

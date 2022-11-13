@@ -203,6 +203,24 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	progressEmitter.emit('init', ProgressStages.extensionInitStart);
 
+	// When text document is modified
+	let pause: NodeJS.Timeout;
+	vscode.workspace.onDidChangeTextDocument((e) =>{
+
+		if(e.contentChanges.length > 0){
+
+			clearTimeout(pause);
+
+			pause = setTimeout(() => {
+				debugMessage(DebugTypes.info, "Typing stopped for " + config.typeWaitDelay + "ms");
+				
+				progressEmitter.emit('init', ProgressStages.extensionInitStart);
+
+			}, config.typeWaitDelay);
+	
+		}
+	});
+
 	// When user changes settings
 	vscode.workspace.onDidChangeConfiguration((e) => {
 		debugMessage(DebugTypes.info, "Configuration Changed");
