@@ -39,13 +39,11 @@
           "description": "Inference Modes",
           "enum": [
             "Local",
-            "On Premise",
-            "Cloud"
+            "On Premise"
           ],
           "enumDescriptions": [
             "Model is downloaded locally to your computer and processed locally for inference",
             "Allows you to host the model on on-premise server for inference",
-            "Model and inference is provided by a cloud service"
           ]
         },
         "AiBugHunter.inference.inferenceServerURL": {

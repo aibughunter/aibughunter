@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 import { DebugTypes, InferenceModes, ProgressStages } from "./config";
 import { debugMessage } from "./common";
 import { PythonShell } from 'python-shell';
