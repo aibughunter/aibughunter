@@ -4,7 +4,7 @@
   "publisher": "AIBugHunter",
   "description": "AI-driven Software Security Tool That Aims to Help Security Analysts Locate the Vulnerable Source Code Faster",
   "icon": "logo.png",
-  "version": "0.0.4",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.69.0"
   },

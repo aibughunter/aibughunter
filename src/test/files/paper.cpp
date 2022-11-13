@@ -9,12 +9,3 @@ static sk_sp<SkImage> unPremulSkImageToPremul(SkImage *input)
       info, std::move(dstPixels),
       static_cast<size_t>(input->width()) * info.bytesPerPixel());
 }
-
-__cpp_aggregate_nsdmi
-asm
-
-
-a
-alignasa
-a
-alignas
