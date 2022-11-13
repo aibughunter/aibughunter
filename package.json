@@ -4,7 +4,7 @@
   "publisher": "AIBugHunter",
   "description": "AI-driven Software Security Tool That Aims to Help Security Analysts Locate the Vulnerable Source Code Faster",
   "icon": "logo.png",
-  "version": "0.0.4",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.69.0"
   },
@@ -39,13 +39,11 @@
           "description": "Inference Modes",
           "enum": [
             "Local",
-            "On Premise",
-            "Cloud"
+            "On Premise"
           ],
           "enumDescriptions": [
             "Model is downloaded locally to your computer and processed locally for inference",
-            "Allows you to host the model on on-premise server for inference",
-            "Model and inference is provided by a cloud service"
+            "Allows you to host the model on on-premise server for inference"
           ]
         },
         "AiBugHunter.inference.inferenceServerURL": {
@@ -54,9 +52,9 @@
           "default": "http://localhost:5000",
           "description": "Root URL of the inference server hosted on the on-premise server"
         },
-        "AiBugHunter.inference.EnableGPU": {
+        "AiBugHunter.inference.useCUDA": {
           "order": 1,
-          "description": "Enable GPU for inference (CPU Fallback)",
+          "description": "Enable CUDA for inference (CUDA supported card required)",
           "type": "boolean",
           "default": false
         },
@@ -122,24 +120,6 @@
           "type": "number",
           "default": 1500,
           "description": "Delay after paused typing before analysis (in milliseconds)"
-        },
-        "AiBugHunter.model.downloadLocation": {
-          "order": 8,
-          "type": "string",
-          "default": ".",
-          "description": "Location to download the model to (default: extension directory)"
-        },
-        "AiBugHunter.cwe.downloadLocation": {
-          "order": 9,
-          "type": "string",
-          "default": ".",
-          "description": "Location to download the CWE List to (default: extension directory)"
-        },
-        "AiBugHunter.resources.subDirectory": {
-          "order": 10,
-          "type": "string",
-          "default": "resources",
-          "description": "Subdirectory to store resources (models, CWE list, etc.). Empty for no subdirectory."
         }
       }
     }
@@ -175,6 +155,7 @@
   ],
   "dependencies": {
     "axios": "^0.27.2",
+    "dotenv": "^16.0.3",
     "extract-zip": "^2.0.1",
     "fs": "^0.0.1-security",
     "path": "^0.12.7",

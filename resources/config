@@ -1,0 +1,5 @@
+LINE_MODEL_URL="https://object-store.rc.nectar.org.au/v1/AUTH_bec3bd546fd54995896239e9ff3d4c4f/AIBugHunterModels/models/line_model.onnx"
+SEV_MODEL_URL = "https://object-store.rc.nectar.org.au/v1/AUTH_bec3bd546fd54995896239e9ff3d4c4f/AIBugHunterModels/models/sev_model.onnx"
+CWE_MODEL_URL = "https://object-store.rc.nectar.org.au/v1/AUTH_bec3bd546fd54995896239e9ff3d4c4f/AIBugHunterModels/models/cwe_model.onnx"
+CWE_XML_URL = "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip"
+INFERENCE_PACK_URL = "https://object-store.rc.nectar.org.au/v1/AUTH_bec3bd546fd54995896239e9ff3d4c4f/AIBugHunterModels/local-inference-data.zip"

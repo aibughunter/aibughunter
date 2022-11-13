@@ -1,0 +1,3 @@
+[submodule "resources/local-inference"]
+	path = resources/local-inference
+	url = https://github.com/aibughunter/local-inference
