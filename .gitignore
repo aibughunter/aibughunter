@@ -9,3 +9,4 @@ node_modules
 src/test/files/.vscode
 test.py
 *.vsix
+*.cpp
