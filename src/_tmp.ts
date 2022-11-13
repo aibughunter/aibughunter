@@ -6,12 +6,8 @@ import * as vscode from 'vscode';
 import { MessageChannel } from 'worker_threads';
 import {DocumentConfig, DebugTypes, GlobalURLs, Functions, HighlightTypes, InferenceModes, InfoLevels, Predictions, ProgressStages, remoteInferenceURLs, DiagnosticInformation, filePrensence} from './config';
 import { stdin } from 'process';
-
-// import class from files
 import { LocalInference, RemoteInference } from './inference';
-import { Progress } from './common';
 
-// modules
 export const axios = require('axios');
 export const fs = require('fs');
 export const path = require('path');
@@ -19,175 +15,190 @@ export const fsa = require('fs/promises');
 // const formdata = require('form-data');
 export const extract = require('extract-zip');
 export const parser = require('xml2js');
-export const dotenv = require('dotenv').config({ path: path.join(__dirname, '..', 'resources' , '.config') });
 
 export let config:DocumentConfig;
 export let predictions:Predictions;
 export let functionSymbols: Functions;
 export let inferenceMode: LocalInference | RemoteInference;
 
+
+export class Progress extends EventEmitter{
+	constructor(){
+		super();
+	}
+	init(stage:ProgressStages){
+		this.emit('init', stage);
+	}
+
+	update(stage:ProgressStages){
+		this.emit('update', stage);
+	}
+
+	end(stage:ProgressStages){
+		this.emit('end', stage);
+	}
+}
+
 export const progressEmitter = new Progress();
 let statusBarItem: vscode.StatusBarItem;
-let busy = false;
 
+let busy = false;
 
 export async function activate(context: vscode.ExtensionContext) {
 
-	console.log(process.env.LINE_MODEL_URL);
+	debugMessage(DebugTypes.info, "Extension initialised");
+	// Initial analysis after initialisation, may wrap this in extInitend event
 
-	// debugMessage(DebugTypes.info, "Extension initialised");
-	// // Initial analysis after initialisation, may wrap this in extInitend event
+	const diagnosticCollection = vscode.languages.createDiagnosticCollection('AIBugHunter');
+	context.subscriptions.push(diagnosticCollection);
 
-	// const diagnosticCollection = vscode.languages.createDiagnosticCollection('AIBugHunter');
-	// context.subscriptions.push(diagnosticCollection);
+	context.subscriptions.push(
+		vscode.languages.registerCodeActionsProvider('cpp', new RepairCodeAction(), {
+			providedCodeActionKinds: RepairCodeAction.providedCodeActionKinds
+		})
+	);
 
-	// context.subscriptions.push(
-	// 	vscode.languages.registerCodeActionsProvider('cpp', new RepairCodeAction(), {
-	// 		providedCodeActionKinds: RepairCodeAction.providedCodeActionKinds
-	// 	})
-	// );
+	/**
+	 * Any init event will be handled here
+	 * If extInit, then initialise extension (download necessary files, etc)
+	 * If analysis, then start analysis of active document
+	 * @param stage Stage of progress
+	 */
+	progressEmitter.on('init', async (stage:ProgressStages) => {
 
-	// /**
-	//  * Any init event will be handled here
-	//  * If extInit, then initialise extension (download necessary files, etc)
-	//  * If analysis, then start analysis of active document
-	//  * @param stage Stage of progress
-	//  */
-	// progressEmitter.on('init', async (stage:ProgressStages) => {
+		const activeDocument = vscode.window.activeTextEditor?.document ?? undefined;
 
-	// 	const activeDocument = vscode.window.activeTextEditor?.document ?? undefined;
+		progressHandler(stage);
 
-	// 	progressHandler(stage);
+		switch(stage){
+			case ProgressStages.extInit:
+				let noerror = false;
 
-	// 	switch(stage){
-	// 		case ProgressStages.extInit:
-	// 			let noerror = false;
+				if(!busy){
+					// vscode.window.showInformationMessage('AIBugHunter: Downloading necessary files...');
+					busy = true;
+					while(!noerror){
+						await init().then(() => {
+							noerror = true;
+						}
+						).catch(err => {
+							debugMessage(DebugTypes.error, err);
+							debugMessage(DebugTypes.info, "Error occured during initialisation. Retrying...");
+						}
+						);
+					}
+					busy = false;
 
-	// 			if(!busy){
-	// 				// vscode.window.showInformationMessage('AIBugHunter: Downloading necessary files...');
-	// 				busy = true;
-	// 				while(!noerror){
-	// 					await init().then(() => {
-	// 						noerror = true;
-	// 					}
-	// 					).catch(err => {
-	// 						debugMessage(DebugTypes.error, err);
-	// 						debugMessage(DebugTypes.info, "Error occured during initialisation. Retrying...");
-	// 					}
-	// 					);
-	// 				}
-	// 				busy = false;
-
-	// 				// vscode.window.showInformationMessage('AIBugHunter: Initialisation complete');
-	// 				progressEmitter.emit('end', ProgressStages.extInitEnd);
-	// 				debugMessage(DebugTypes.info, "Running initial analysis");
-	// 				progressEmitter.emit('init', ProgressStages.inferenceStart);
+					// vscode.window.showInformationMessage('AIBugHunter: Initialisation complete');
+					progressEmitter.emit('end', ProgressStages.extInitEnd);
+					debugMessage(DebugTypes.info, "Running initial analysis");
+					progressEmitter.emit('init', ProgressStages.inferenceStart);
 					
-	// 			} else{
-	// 				vscode.window.showInformationMessage('AIBugHunter: Initialisation already in progress');
-	// 				debugMessage(DebugTypes.info, "Initialisation already in progress");
-	// 			}
-	// 			break;
-	// 		case ProgressStages.inferenceStart:
-	// 			if(!busy){
-	// 				if(activeDocument){
-	// 					busy = true;
+				} else{
+					vscode.window.showInformationMessage('AIBugHunter: Initialisation already in progress');
+					debugMessage(DebugTypes.info, "Initialisation already in progress");
+				}
+				break;
+			case ProgressStages.inferenceStart:
+				if(!busy){
+					if(activeDocument){
+						busy = true;
 					
 						
-	// 					inferenceEngine(activeDocument).then(() => {
+						inferenceEngine(activeDocument).then(() => {
 	
-	// 						progressEmitter.emit('end', ProgressStages.predictionEnd);
+							progressEmitter.emit('end', ProgressStages.predictionEnd);
 	
-	// 						debugMessage(DebugTypes.info, "Starting diagnostic construction");
+							debugMessage(DebugTypes.info, "Starting diagnostic construction");
 							
 
-	// 						constructDiagnostics(activeDocument, diagnosticCollection);
-	// 					}
-	// 					).catch(err => {
-	// 						debugMessage(DebugTypes.error, err);
-	// 						debugMessage(DebugTypes.error, "Analysis failed");
-	// 						progressEmitter.end(ProgressStages.error);
-	// 					}
-	// 					);
-	// 					busy = false;
-	// 					break;
-	// 				}else{
-	// 					debugMessage(DebugTypes.error, "No active document");
-	// 					progressEmitter.emit('end', ProgressStages.nodoc);
-	// 					busy = false;
-	// 				}
-	// 			} else{
-	// 				debugMessage(DebugTypes.error, "Analysis already in progress");
-	// 			}
-	// 	}
-	// }
-	// );
+							constructDiagnostics(activeDocument, diagnosticCollection);
+						}
+						).catch(err => {
+							debugMessage(DebugTypes.error, err);
+							debugMessage(DebugTypes.error, "Analysis failed");
+							progressEmitter.end(ProgressStages.error);
+						}
+						);
+						busy = false;
+						break;
+					}else{
+						debugMessage(DebugTypes.error, "No active document");
+						progressEmitter.emit('end', ProgressStages.nodoc);
+						busy = false;
+					}
+				} else{
+					debugMessage(DebugTypes.error, "Analysis already in progress");
+				}
+		}
+	}
+	);
 
 
-	// progressEmitter.emit('init', ProgressStages.extInit);
+	progressEmitter.emit('init', ProgressStages.extInit);
 
-	// let pause: NodeJS.Timeout;
+	let pause: NodeJS.Timeout;
 
-	// vscode.workspace.onDidChangeTextDocument((e) =>{
+	vscode.workspace.onDidChangeTextDocument((e) =>{
 
-	// 	if(e.contentChanges.length > 0){
+		if(e.contentChanges.length > 0){
 
-	// 		clearTimeout(pause);
+			clearTimeout(pause);
 
-	// 		pause = setTimeout(() => {
-	// 			debugMessage(DebugTypes.info, "Typing stopped for " + config.delay + "ms");
+			pause = setTimeout(() => {
+				debugMessage(DebugTypes.info, "Typing stopped for " + config.delay + "ms");
 				
-	// 			progressEmitter.emit('init', ProgressStages.extInit);
+				progressEmitter.emit('init', ProgressStages.extInit);
 
-	// 		}, config.delay);
+			}, config.delay);
 	
-	// 	}
-	// });
+		}
+	});
 
-	// // Reinitialise interfaces on configuration modification
-	// vscode.workspace.onDidChangeConfiguration((e) => {
-	// 	debugMessage(DebugTypes.info, "Configuration Changed");
-	// 	progressEmitter.emit('init', ProgressStages.extInit);
-	// });
+	// Reinitialise interfaces on configuration modification
+	vscode.workspace.onDidChangeConfiguration((e) => {
+		debugMessage(DebugTypes.info, "Configuration Changed");
+		progressEmitter.emit('init', ProgressStages.extInit);
+	});
 
-	// // vscode.workspace.onDidOpenTextDocument((e) => {
-	// // 	debugMessage(DebugTypes.info, "Document opened");
-	// // 	console.log(e);
-	// // 	// if(e?.document.languageId === 'cpp'){
-	// // 	// 	interfaceInit();
-	// // 	// 	progressEmitter.emit('init', ProgressStages.analysis);
-	// // 	// }
-	// // }
-	// // );
-
-	// vscode.window.onDidChangeActiveTextEditor((e) => {
-	// 	debugMessage(DebugTypes.info, "Active text editor changed");
-	// 	if(e?.document.languageId === 'cpp'){
-	// 		progressEmitter.emit('init', ProgressStages.extInit);
-	// 	}
-	// });
-
-	// const restart = 'aibughunter.restart';
-	// const restartCommand = vscode.commands.registerCommand(restart, () => {
-	// 	debugMessage(DebugTypes.info, "Restarting extension");
-	// 	progressEmitter.emit('init', ProgressStages.extInit);
+	// vscode.workspace.onDidOpenTextDocument((e) => {
+	// 	debugMessage(DebugTypes.info, "Document opened");
+	// 	console.log(e);
+	// 	// if(e?.document.languageId === 'cpp'){
+	// 	// 	interfaceInit();
+	// 	// 	progressEmitter.emit('init', ProgressStages.analysis);
+	// 	// }
 	// }
 	// );
 
-	// context.subscriptions.push(restartCommand);
+	vscode.window.onDidChangeActiveTextEditor((e) => {
+		debugMessage(DebugTypes.info, "Active text editor changed");
+		if(e?.document.languageId === 'cpp'){
+			progressEmitter.emit('init', ProgressStages.extInit);
+		}
+	});
 
-	// statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-	// statusBarItem.command = restart;
-	// statusBarItem.text = 'Restart AIBugHunter';
-	// statusBarItem.name = 'AIBugHunter';
-	// statusBarItem.tooltip = 'Click to reinitialise AIBugHunter';
-	// statusBarItem.show();
+	const restart = 'aibughunter.restart';
+	const restartCommand = vscode.commands.registerCommand(restart, () => {
+		debugMessage(DebugTypes.info, "Restarting extension");
+		progressEmitter.emit('init', ProgressStages.extInit);
+	}
+	);
+
+	context.subscriptions.push(restartCommand);
+
+	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+	statusBarItem.command = restart;
+	statusBarItem.text = 'Restart AIBugHunter';
+	statusBarItem.name = 'AIBugHunter';
+	statusBarItem.tooltip = 'Click to reinitialise AIBugHunter';
+	statusBarItem.show();
 	
-	// context.subscriptions.push(statusBarItem);
+	context.subscriptions.push(statusBarItem);
 
-	// context.subscriptions.push(
-	// 	vscode.commands.registerCommand('aibughunter.repairCode', () => { })
-	// );
+	context.subscriptions.push(
+		vscode.commands.registerCommand('aibughunter.repairCode', () => { })
+	);
 
 
 
@@ -1043,52 +1054,3 @@ export class RepairCodeAction implements vscode.CodeActionProvider {
 	}
 
 }
-
-// Implement Config as a class (fake singleton)
-export class Config {
-
-	inferenceMode: InferenceModes = InferenceModes.local;
-	useCUDA: boolean = false;
-	inferenceURL: string = "http://localhost:5000";
-	infoLevel: InfoLevels = InfoLevels.fluent;
-	customDiagInfos: DiagnosticInformation | undefined;
-	showDescription: boolean = true;
-	diagnosticSeverity: vscode.DiagnosticSeverity = vscode.DiagnosticSeverity.Error;
-	maxIndicatorLines: number = 1;
-	typeWaitDelay: number = 1500;
-
-	// Model Paths as a dictionary
-	modelPaths: {[key: string]: string} = {
-		"line": ".",
-		"sev": ".",
-		"cwe": ".",
-	};
-	downloadPaths: {[key: string]: string} = {
-		"cweXML": ".",
-	};
-
-	subDir: string = ".";
-	localInferenceResDir: string = "./local";
-
-
-}
-
-// Implement all above in class
-export class VulDiagnostic {
-
-	targetDocument: vscode.TextDocument | undefined;
-	// Ignore construction of diagnostic to prevent multiple diagnostics for same vulnerability (When another prediction model request is made before the first one is finished)
-	ignore: boolean = false;
-
-	constructor(targetDocument: vscode.TextDocument | undefined){
-		this.targetDocument = targetDocument;
-	}
-
-	// Init, inference, and construct is implemented in this class
-}
-
-// If there was another request made before the first one, it needs to verify if the request is to the same part of the code
-// If rescanning the entire document, simply ignore the previous request
-// Need to implement system to determine the modified function of the code with error handling (if function not found, scan entire document or ignore)
-
-// All necessary files should be kept in assets folder (src folder will not be included in the extension package)

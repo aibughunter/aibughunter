@@ -5,6 +5,8 @@ import { config, predictions, progressEmitter } from "./extension";
 
 const axios = require('axios');
 
+// Interface inference and implement for local and remote inference
+
 export class LocalInference{
 	public async line(list: Array<string>): Promise<any>{
 

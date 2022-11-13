@@ -1,10 +1,10 @@
 import {DiagnosticSeverity } from "vscode";
 
-export interface Config {
+export interface DocumentConfig {
     inferenceMode: InferenceModes;
     gpu: boolean;
     onPremiseInferenceURL: string;
-    informationLevel: InformationLevels;
+    informationLevel: InfoLevels;
     diagnosticInformation: DiagnosticInformation;
     showDescription: boolean;
     diagnosticSeverity?: DiagnosticSeverity;
@@ -31,7 +31,7 @@ export enum InferenceModes {
     cloud = "Cloud"
 }
 
-export enum InformationLevels {
+export enum InfoLevels {
     verbose = "Verbose",
     fluent = "Fluent"
 }
