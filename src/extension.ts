@@ -1,4 +1,4 @@
-import { rejects } from 'assert';
+import { rejects, strict } from 'assert';
 import { copyFileSync } from 'fs';
 import { EventEmitter } from 'stream';
 import { setFlagsFromString } from 'v8';
@@ -288,7 +288,17 @@ async function downloadCWEXML() {
 
 	// const modelPath = (config.downloadPaths.lineModel === ".")? parentDir + "/" + config.downloadPaths.lineMode: config.downloadPaths.lineMode;
 
-	const modelPath = parentDir + "/resources";
+	let modelPath = parentDir + "/resources/local-inference/models";
+
+	if(!fs.existsSync(path.join(modelPath))){
+		fs.mkdirSync(path.join(modelPath), (err: any) => {
+			if (err) {
+				return console.error(err);
+			}
+			debugMessage(DebugTypes.info, "Directory created successfully at " + (path.join(modelPath)));
+		}
+		);
+	}
 
 	// const lineModelPath = path.resolve(modelPath, config.resSubDir,'line_model.onnx');
 	const lineModelPath = path.resolve(modelPath, 'line_model.onnx');
