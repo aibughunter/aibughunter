@@ -43,7 +43,7 @@
           ],
           "enumDescriptions": [
             "Model is downloaded locally to your computer and processed locally for inference",
-            "Allows you to host the model on on-premise server for inference",
+            "Allows you to host the model on on-premise server for inference"
           ]
         },
         "AiBugHunter.inference.inferenceServerURL": {
