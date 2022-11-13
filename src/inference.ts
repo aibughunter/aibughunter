@@ -152,8 +152,6 @@ export class RemoteInference extends InferenceEngine implements Inference{
 
 		let jsonObject = JSON.stringify(list);
 		
-		console.log(jsonObject);
-
 		var signal = new AbortController;
 		signal.abort;
 		var start = new Date().getTime();

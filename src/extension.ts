@@ -168,6 +168,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
 				if (!lock){
 					if (vscode.window.activeTextEditor?.document){
+
+						// If there are duplicate requests, only show the result of the last request
 						if (diagnosticsQueue.length > 0){
 							diagnosticsQueue.forEach(element => {
 								element.ignore = true;
@@ -175,9 +177,17 @@ export async function activate(context: vscode.ExtensionContext) {
 						}
 						const vulDiagnostic = new VulDiagnostic(vscode.window.activeTextEditor?.document);
 						diagnosticsQueue.push(vulDiagnostic);
-						await vulDiagnostic.analysisSequence();
 
-						console.log(vulDiagnostic.functionsList);
+						await vulDiagnostic.analysisSequence(diagnosticCollection).then(()=>{
+							diagnosticsQueue.forEach( (item, index) => {
+								if(item === vulDiagnostic) {
+									diagnosticsQueue.splice(index,1);
+								}
+							  });
+						}).catch(err => {
+							debugMessage(DebugTypes.error, "Error occured during analysis");
+							progressEmitter.emit("end", ProgressStages.error);
+						});
 
 					} else {
 						debugMessage(DebugTypes.info, "No active text editor");
@@ -433,7 +443,7 @@ export class VulDiagnostic {
 
 	// extractFunctions, inference, and construct is implemented in this class
 
-	async analysisSequence(){
+	async analysisSequence(diagnosticCollection: vscode.DiagnosticCollection) {
 
 		await this.extractFunctions().then(() => {
 			debugMessage(DebugTypes.info, "Finished extracting functions");
@@ -452,6 +462,16 @@ export class VulDiagnostic {
 			return Promise.reject(err);
 		}
 		);
+
+		await this.constructDiagnostics(diagnosticCollection).then(() => {
+			debugMessage(DebugTypes.info, "Finished constructing diagnostics");
+		}
+		).catch(err => {
+			debugMessage(DebugTypes.error, err);
+			return Promise.reject(err);
+		}
+		);
+		
 	}
 
 	/**
@@ -531,11 +551,9 @@ export class VulDiagnostic {
 	}
 
 	/**
-	 * Entry point for vulnerability analysis
-	 * Contains three steps:
-	 * 1. Extract functions from the current editor
-	 * 2. Send list of functions to the inference engine to get vulnerability information and store it in predictions object
-	 * 3. Collect vulnerable functions only and send them to CWE and Severity inference engines and store it in predictions object
+	 * Runs inference on the extracted functions
+	 * 1. Send list of functions to the inference engine to get vulnerability information and store it in predictions variable
+	 * 2. Collect only the vulnerable functions and send them to CWE and Severity inference endpoints and store it in predictions variable
 	 * @param document TextDocument to extract text/function from
 	 * @returns 
 	 */
@@ -604,14 +622,247 @@ export class VulDiagnostic {
 		return Promise.resolve();
 	}
 
+	/**
+	 * Takes all the predictions results and constructs diagnostics for each vulnerable function
+	 * @param doc TextDocument to display diagnostic collection in
+	 * @param diagnosticCollection DiagnosticCollection to set diagnostics for
+	 */
+	async constructDiagnostics(diagnosticCollection: vscode.DiagnosticCollection){
 
+		if(this.targetDocument === undefined){
+			debugMessage(DebugTypes.error, "No document found to construct diagnostics");
+			return 1;
+		}
+
+		if(this.ignore){
+			debugMessage(DebugTypes.info, "Ignoring diagnostics");
+			progressEmitter.emit('end', ProgressStages.ignore);
+			return 0;
+		}
+
+		let vulCount = 0;
+		let diagnostics: vscode.Diagnostic[] = [];
+
+		let cweList: any[] = [];
+
+		this.predictions.line.batch_vul_pred.forEach((element: any, i: number) => {
+			if(element === 1){
+				cweList.push([this.predictions.cwe.cwe_type[vulCount], this.predictions.cwe.cwe_id[vulCount].substring(4)]);
+				vulCount++;
+			}
+		});
+
+		await this.fetchCWEData(cweList);
+
+		vulCount = 0;
+
+		progressEmitter.emit('update', ProgressStages.constructDiagnosticsStart);
+
+		this.functionsList.range.forEach((value: any, i: number) => {
+			if(this.predictions.line.batch_vul_pred[i] === 1){
+				debugMessage(DebugTypes.info, "Constructing diagnostic for function: " + i);
+
+				// this.functionsList.* contains all functions
+				// this.predictions.line contains line predcitions for all functions
+				// this.predictions.cwe and predictions.sev contain only vulnerable functions
+
+				const cweID = this.predictions.cwe.cwe_id[vulCount];
+				const cweIDProb = this.predictions.cwe.cwe_id_prob[vulCount];
+				const cweType = this.predictions.cwe.cwe_type[vulCount];
+				const cweTypeProb = this.predictions.cwe.cwe_type_prob[vulCount];
+
+				let cweDescription = this.predictions.cwe.descriptions[vulCount];
+				const cweName = this.predictions.cwe.names[vulCount];
+
+				const sevScore = this.predictions.sev.batch_sev_score[vulCount];
+				const sevClass = this.predictions.sev.batch_sev_class[vulCount];
+
+				const lineScores = this.predictions.line.batch_line_scores[i];
+				
+				let lineScoreShiftMapped: number[][] = [];
+
+				this.functionsList.shift[i].forEach((element:number) =>{
+					lineScores.splice(element, 0, 0);
+				});
+
+				let lineStart = this.functionsList.range[i].start.line;
+
+				lineScores.forEach((element: number) => {
+					lineScoreShiftMapped.push([lineStart, element]);
+					lineStart++;
+				});
+
+				// Sort by prediction score
+				lineScoreShiftMapped.sort((a: number[], b: number[]) => {
+					return b[1] - a[1];
+				}
+				);
+
+				const url = "https://cwe.mitre.org/data/definitions/" + cweID.substring(4) + ".html";
+
+				for(var i = 0; i < config.maxIndicatorLines; i++){
+					
+					const vulnLine = lineScoreShiftMapped[i][0];
+
+					const lines = this.targetDocument?.getText().split("\n") ?? [];
+
+					let line = this.targetDocument?.lineAt(vulnLine);
+
+					let diagMessage = "";
+
+					cweDescription = this.predictions.cwe.descriptions[vulCount];
+
+					const separator = " | ";
+
+					switch(config.infoLevel){
+						case InfoLevels.fluent: {
+							// diagMessage = "Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " | CWE: " + cweID.substring(4) + " " + ((cweName === undefined || "") ? "" : ("(" + cweName + ") ") )  + "| Type: " + cweType;
+							diagMessage = "[Severity: " + sevClass + " (" + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + ")" + "] Line " + (vulnLine+1) + " may be vulnerable with " + cweID + " (" + cweName + " | Abstract Type: " + cweType + ")";  
+							break;
+						}
+						case InfoLevels.verbose: {
+							// diagMessage = "[" + lineScoreShiftMapped[i][1].toString().match(/^\d+(?:\.\d{0,2})?/) + "] Line: " + (vulnLine+1) + " | Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " (" + sevClass +")" +" | " + "[" + cweIDProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " +"CWE: " + cweID.substring(4) + " " + ((cweName === undefined || "") ? "" : ("(" + cweName + ") ") )  + "| " + "[" + cweTypeProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " + "Type: " + cweType;
+							diagMessage += (config.customDiagInfos?.includes(DiagnosticInformation.lineNumber))? "Line " + (vulnLine + 1) + separator : "";
+							diagMessage += (config.customDiagInfos?.includes(DiagnosticInformation.cweID))? (config.customDiagInfos?.includes(DiagnosticInformation.confidenceScore)? "[" + cweIDProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " + cweID: cweID) : "" ;
+							diagMessage += ((config.customDiagInfos?.includes(DiagnosticInformation.cweID)) && config.customDiagInfos?.includes(DiagnosticInformation.cweSummary))? " (" + cweName + ")" + separator : "";
+							diagMessage += (config.customDiagInfos?.includes(DiagnosticInformation.cweType))? (config.customDiagInfos?.includes(DiagnosticInformation.confidenceScore)?  "[" + cweTypeProb.toString().match(/^\d+(?:\.\d{0,2})?/) + "] " + "Abstract: " + cweType + separator: "Abstract: " + cweType + separator) : "";
+							diagMessage += (config.customDiagInfos?.includes(DiagnosticInformation.severityLevel))? (config.customDiagInfos?.includes(DiagnosticInformation.severityScore))? "Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/) + " (" + sevClass + ")":  "Severity: " + sevClass : (config.customDiagInfos?.includes(DiagnosticInformation.severityScore))? "Severity: " + sevScore.toString().match(/^\d+(?:\.\d{0,2})?/):"";
+							diagMessage = diagMessage.endsWith(separator)? diagMessage.substring(0, diagMessage.length - separator.length) : diagMessage;
+							break;
+						}
+					};
+
+					const range = new vscode.Range(vulnLine, this.targetDocument?.lineAt(vulnLine).firstNonWhitespaceCharacterIndex ?? 0, vulnLine, line?.text.length ?? 0);
+
+					const diagnostic = new vscode.Diagnostic(
+						range,
+						diagMessage,
+						config.diagnosticSeverity ?? vscode.DiagnosticSeverity.Error
+					);
+
+					diagnostic.code = {
+						value: "More Details",
+						target: vscode.Uri.parse(url)
+					};
+
+					diagnostic.source = "AIBugHunter";
+
+					// Get the text at the range
+					const text = this.targetDocument?.getText(new vscode.Range(vulnLine, 0, vulnLine, line?.text.length ?? 0));
+					
+					diagnostics.push(diagnostic);
+
+					if(config.showDescription){
+						const diagnosticDescription = new vscode.Diagnostic(
+							range,
+							cweDescription,
+							config.diagnosticSeverity ?? vscode.DiagnosticSeverity.Error
+						);
+		
+						diagnosticDescription.code = {
+							value: "More Details",
+							target: vscode.Uri.parse(url)
+						};
+		
+						diagnostics.push(diagnosticDescription);
+					}
+				}
+				vulCount++;
+			}
+		});
+
+		progressEmitter.emit("end", ProgressStages.analysisEnd);
+
+		diagnosticCollection.delete(this.targetDocument.uri);
+		diagnosticCollection.set(this.targetDocument.uri, diagnostics);
+		
+		return 0;
+	}
+
+
+	/**
+	 * Takes a list of CWE Types and CWE IDs and fetches the CWE data from the CWE xml
+	 * It stores the name and description into new fields in object: predictions.cwe.names and predictions.cwe.descriptions
+	 * @param list List of CWE IDs ( [[CWE Type, CWE ID]] )
+	 * @returns Promise that resolves when successfully retrieved CWE data from XML, rejects otherwise
+	 */
+	async fetchCWEData(list:any){
+		progressEmitter.emit("update", ProgressStages.cweSearchStart);
+
+		try{
+			const data = await fsa.readFile(config.cweXMLFile); // replace config.xmlpath with manual path
+			debugMessage(DebugTypes.info, "CWE XML file read");
+
+			try{
+				debugMessage(DebugTypes.info, "Parsing CWE XML file");
+				
+				const parsed:any = await new Promise((resolve, reject) => parser.parseString(data, (err: any, result: any) => {
+					if (err) {reject(err); return Promise.reject(err);}
+					else {resolve(result);}
+				}));
+
+				if(!parsed){
+					debugMessage(DebugTypes.error, "Error parsing CWE XML file");
+					progressEmitter.emit("end", ProgressStages.error);
+					return Promise.reject();
+				} else{
+					
+					debugMessage(DebugTypes.info, "Parsed CWE XML file. Getting data");
+					const weaknessDescriptions: any[] = [];
+					const weaknessNames: any[] = [];
+
+					list.forEach((element:any, i: number) => {
+						
+						let weakness: any;
+						let weaknessDescription: string = "";
+						let weaknessName: string = "";
+
+						switch(element[0]){
+							case "Base": {
+								weakness = parsed.Weakness_Catalog.Weaknesses[0].Weakness.find((obj:any) =>{
+									return obj.$.ID === element[1].toString();
+								});
+								weaknessDescription = weakness.Description[0];
+								break;
+							}
+							case "Category": {
+								weakness = parsed.Weakness_Catalog.Categories[0].Category.find((obj:any) =>{
+									return obj.$.ID === element[1].toString();
+								});
+								weaknessDescription = weakness.Summary[0];
+								break;
+							}
+							default: {
+								weakness = parsed.Weakness_Catalog.Weaknesses[0].Weakness.find((obj:any) =>{
+									return obj.$.ID === element[1].toString();
+								});
+								weaknessDescription = weakness.Description[0];
+								break;
+							}
+						}
+
+						weaknessName = weakness.$.Name;
+
+						weaknessDescriptions.push(weaknessDescription);
+						weaknessNames.push(weaknessName);
+
+					});
+					
+					this.predictions.cwe.descriptions = weaknessDescriptions;
+					this.predictions.cwe.names = weaknessNames;
+
+					return Promise.resolve();
+				} 
+			} catch(err){
+				debugMessage(DebugTypes.error, "Error Parsing CWE XML file");
+				progressEmitter.emit("end", ProgressStages.error);
+				return Promise.reject(err);
+			}
+		
+		} catch(err:any){
+			debugMessage(DebugTypes.error, "Error while reading CWE XML file: " + err);
+			progressEmitter.emit("end", ProgressStages.error);
+			return Promise.reject(err);
+		}
+	}
 }
-
-
-// If there was another request made before the first one, it needs to verify if the request is to the same part of the code
-// If rescanning the entire document, simply ignore the previous request
-// Need to implement system to determine the modified function of the code with error handling (if function not found, scan entire document or ignore)
-
-// All necessary files should be kept in resources folder (src folder will not be included in the extension package)
-// The max fielzie of the extension is 25mb hence we till need method to download the model files and store them in the assets folder
-// CWE XML file and local inference script can be included directly in the assets folder
