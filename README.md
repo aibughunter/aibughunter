@@ -41,12 +41,17 @@ pip3 install numpy onnxruntime torch transformers
 # You may replace onnxruntime with onnxruntime-gpu
 ```
 
+Refer to the [ONNX Runtime Website](https://onnxruntime.ai/docs/get-started/with-python.html#install-onnx-runtime) to determine whether to install `onnxruntime-gpu` or `onnxruntime` on your machine
+
+
 ### Remote Inference
 
 There are two ways you can deploy an on-premise inference server:
 
-1. Running generic Python script with Uvicorn
-2. Deploy using Docker Image provided <-- Recommended method
+1. Running generic Python script with Uvicorn ([aibughunter/remote-inference-py](https://github.com/aibughunter/remote-inference-py))
+2. Deploy using Docker Image provided <-- Recommended method ([aibughunter/remote-inference-docker](https://github.com/aibughunter/remote-inference-docker))
+
+Refer to the respective repository's README on the deployment guide.
 
 ## Extension Settings
 
