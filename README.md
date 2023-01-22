@@ -4,6 +4,9 @@ AI-based software vulnerability prediction IDE plug-in that was trained using da
 
 > This is a very early preview of the extension with a lot of improvements to be made in the future. As of version 1.0.0, the extension does not include one of the major features: repair, although this feature is scheduled to be released soon.
 
+## Short Demo Video
+[![Demo](https://img.youtube.com/vi/sSV2XjxJfkM/hqdefault.jpg)](https://youtu.be/sSV2XjxJfkM "Demo")
+
 ## Features
 
 The extension will highlight the vulnerable line in the source code and the ML models will predict the following:
