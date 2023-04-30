@@ -94,7 +94,7 @@ export class Config {
 		this.inferenceMode = vsConfig.inference.inferenceMode;
 		this.useCUDA = vsConfig.inference.useCUDA;
 		this.infoLevel = vsConfig.diagnostics.informationLevel;
-		this.customDiagInfos = vsConfig.diagnostics.customDiagnosticInformation;
+		this.customDiagInfos = vsConfig.diagnostics.diagnosticMessageInformation;
 		this.showDescription = vsConfig.diagnostics.showDescription;
 		this.maxIndicatorLines = vsConfig.diagnostics.maxNumberOfLines;
 		this.typeWaitDelay = vsConfig.diagnostics.delayBeforeAnalysis;
