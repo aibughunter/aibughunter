@@ -355,7 +355,7 @@ async function downloadCWEXML() {
 	let modelPath = parentDir + "/resources/local-inference/models";
 
 	if(!fs.existsSync(path.join(modelPath))){
-		fs.mkdirSync(path.join(modelPath), (err: any) => {
+		fs.mkdirSync(path.join(modelPath), { recursive: true } ,(err: any) => {
 			if (err) {
 				return console.error(err);
 			}
