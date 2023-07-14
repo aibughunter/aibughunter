@@ -4,15 +4,15 @@
   "publisher": "AIBugHunter",
   "description": "AI-driven Software Vulnerability Analysis Tool That Helps Security Analysts Locate Vulnerable Code, Explain Vulnerability Types, and Suggest Vulnerability Repairs",
   "icon": "logo.png",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "engines": {
     "vscode": "^1.69.0"
   },
   "categories": [
-    "Deep Learning",
-    "Language Models",
+    "Machine Learning",
     "Testing",
-    "Linters"
+    "Linters",
+    "Data Science"
   ],
   "activationEvents": [
     "onLanguage:cpp"
